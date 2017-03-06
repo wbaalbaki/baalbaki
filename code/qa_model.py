@@ -45,6 +45,8 @@ class Encoder(object):
                  It can be context-level representation, word-level representation,
                  or both.
         """
+        #For now, the first two words of the inputs, concatenated
+        print(inputs)
 
         return
 
@@ -79,6 +81,10 @@ class QASystem(object):
         """
 
         # ==== set up placeholder tokens ========
+        self.input_placeholder = tf.placeholder(shape=(None, self.max_length, encoder.vocab_dim), name="Input", dtype=tf.int32)
+        self.labels_placeholder = tf.placeholder(shape=(None, self.max_length), name="Labels", dtype=tf.int32)
+        self.mask_placeholder = tf.placeholder(shape=(None, self.max_length), name="Mask", dtype=tf.bool)
+        self.dropout_placeholder = tf.placeholder(shape=(), name="Dropout", dtype=tf.float32)
 
 
         # ==== assemble pieces ====
@@ -88,7 +94,11 @@ class QASystem(object):
             self.setup_loss()
 
         # ==== set up training/updating procedure ====
-        pass
+        self.pred = self.add_prediction_op()
+        self.loss = self.setup_loss(self.pred)
+        self.optimizer = get_optimizer("adam")
+        self.train_op = self.optimizer.minimize(self.loss)
+        #pass
 
 
     def setup_system(self):
@@ -98,6 +108,8 @@ class QASystem(object):
         to assemble your reading comprehension system!
         :return:
         """
+
+        self.pred = self.decode(self.encode())
         raise NotImplementedError("Connect all parts of your system here!")
 
 
@@ -107,6 +119,9 @@ class QASystem(object):
         :return:
         """
         with vs.variable_scope("loss"):
+            self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.pred, labels=self.labels_placeholder)
+            self.loss = tf.boolean_mask(self.loss, self.mask_placeholder)
+            self.loss = tf.reduce_mean(self.loss)
             pass
 
     def setup_embeddings(self):
@@ -129,6 +144,20 @@ class QASystem(object):
         # input_feed['train_x'] = train_x
 
         output_feed = []
+
+        #Create mask
+        mask = np.ones(self.max_length)
+        mask[len(train_x):] = 0
+
+        #Create feed_dict
+        feed_dict = {self.input_placeholder: train_x,
+                     self.mask_placeholder: mask,
+                     self.dropout_placeholder: self.dropout}
+        if train_y is not None:
+            feed_dict[self.labels_placeholder] = train_y
+
+        _, loss = session.run([self.train_op, self.loss], feed_dict=feed_dict)
+        output_feed = loss
 
         outputs = session.run(output_feed, input_feed)
 
@@ -216,6 +245,15 @@ class QASystem(object):
         f1 = 0.
         em = 0.
 
+        totExamples = dataset.size[0]
+        examplesToEvaluate = np.random.choice(totExamples, sample)
+
+        for i in examplesToEvaluate:
+            f1 += 0
+            em += 0
+        f1 /= sample
+        em /= sample
+
         if log:
             logging.info("F1: {}, EM: {}, for {} samples".format(f1, em, sample))
 
@@ -229,7 +267,7 @@ class QASystem(object):
         You should also implement learning rate annealing (look into tf.train.exponential_decay)
         Considering the long time to train, you should save your model per epoch.
 
-        More ambitious appoarch can include implement early stopping, or reload
+        More ambitious approach can include implement early stopping, or reload
         previous models if they have higher performance than the current one
 
         As suggested in the document, you should evaluate your training progress by
