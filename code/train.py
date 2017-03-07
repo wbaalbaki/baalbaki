@@ -76,10 +76,75 @@ def get_normalized_train_dir(train_dir):
     return global_train_dir
 
 
+def initialize_datasets(data_dir):
+
+    # Train
+    rev_train_ids_context = []
+    rev_train_ids_question = []
+    rev_train_span = []
+
+    with tf.gfile.GFile(data_dir + "/train.ids.context", mode="rb") as f:
+        rev_train_ids_context.extend(f.readlines())
+    rev_train_ids_context = [line.strip('\n') for line in rev_train_ids_context]
+
+    with tf.gfile.GFile(data_dir + "/train.ids.question", mode="rb") as f:
+        rev_train_ids_question.extend(f.readlines())
+    rev_train_ids_question = [line.strip('\n') for line in rev_train_ids_question]
+
+    with tf.gfile.GFile(data_dir + "/train.span", mode="rb") as f:
+        rev_train_span.extend(f.readlines())
+    rev_train_span = [line.strip('\n') for line in rev_train_span]
+
+    datasetTrain = []
+    for i in range(len(rev_train_ids_context)):
+        a_s = [0] * len(rev_train_ids_context[i].split())
+        a_s[int(rev_train_span[i].split()[0])] = 1
+        a_e = [0] * len(rev_train_ids_context[i].split())
+        a_e[int(rev_train_span[i].split()[1])] = 1
+
+        datasetTrain.append({"ids.paragraph": rev_train_ids_context[i].split(),
+                        "ids.question": rev_train_ids_question[i].split(),
+                        "labels_start": a_s,
+                        "labels_end": a_e,
+                        "span": (int(rev_train_span[i].split()[0]), int(rev_train_span[i].split()[1]))})
+
+    # Validation
+    rev_val_ids_context = []
+    rev_val_ids_question = []
+    rev_val_span = []
+
+    with tf.gfile.GFile(data_dir + "/val.ids.context", mode="rb") as f:
+        rev_val_ids_context.extend(f.readlines())
+    rev_val_ids_context = [line.strip('\n') for line in rev_val_ids_context]
+
+    with tf.gfile.GFile(data_dir + "/val.ids.question", mode="rb") as f:
+        rev_val_ids_question.extend(f.readlines())
+    rev_val_ids_question = [line.strip('\n') for line in rev_val_ids_question]
+
+    with tf.gfile.GFile(data_dir + "/val.span", mode="rb") as f:
+        rev_val_span.extend(f.readlines())
+    rev_val_span = [line.strip('\n') for line in rev_val_span]
+
+    datasetVal = []
+    for i in range(len(rev_val_ids_context)):
+        a_s = [0] * len(rev_val_ids_context[i].split())
+        a_s[int(rev_val_span[i].split()[0])] = 1
+        a_e = [0] * len(rev_val_ids_context[i].split())
+        a_e[int(rev_val_span[i].split()[1])] = 1
+
+        datasetVal.append({"ids.paragraph": rev_val_ids_context[i].split(),
+                             "ids.question": rev_val_ids_question[i].split(),
+                             "labels_start": a_s,
+                             "labels_end": a_e,
+                             "span": (int(rev_val_span[i].split()[0]), int(rev_val_span[i].split()[1]))})
+
+    return datasetTrain, datasetVal
+
+
 def main(_):
 
     # Do what you need to load datasets from FLAGS.data_dir
-    dataset = None
+    datasetTrain, datasetVal = initialize_datasets(FLAGS.data_dir)
 
     embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
     vocab_path = FLAGS.vocab_path or pjoin(FLAGS.data_dir, "vocab.dat")
@@ -104,9 +169,9 @@ def main(_):
         initialize_model(sess, qa, load_train_dir)
 
         save_train_dir = get_normalized_train_dir(FLAGS.train_dir)
-        qa.train(sess, dataset, save_train_dir)
+        qa.train(sess, datasetTrain, save_train_dir)
 
-        qa.evaluate_answer(sess, dataset, vocab, FLAGS.evaluate, log=True)
+        qa.evaluate_answer(sess, datasetVal, vocab, FLAGS.evaluate, log=True)
 
 if __name__ == "__main__":
     tf.app.run()

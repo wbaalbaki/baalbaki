@@ -17,9 +17,9 @@ logging.basicConfig(level=logging.INFO)
 
 def get_optimizer(opt):
     if opt == "adam":
-        optfn = tf.train.AdamOptimizer
+        optfn = tf.train.AdamOptimizer()
     elif opt == "sgd":
-        optfn = tf.train.GradientDescentOptimizer
+        optfn = tf.train.GradientDescentOptimizer()
     else:
         assert (False)
     return optfn
@@ -30,7 +30,7 @@ class Encoder(object):
         self.size = size
         self.vocab_dim = vocab_dim
 
-    def encode(self, inputs, masks, encoder_state_input):
+    def encode(self, paragraph, question, mask_paragraph, mask_question, droup_out, encoder_state_input):
         """
         In a generalized encode function, you pass in your inputs,
         masks, and an initial
@@ -45,10 +45,10 @@ class Encoder(object):
                  It can be context-level representation, word-level representation,
                  or both.
         """
-        #For now, the first two words of the inputs, concatenated
-        print(inputs)
 
-        return
+        ones = tf.ones(shape=tf.shape(paragraph), dtype=tf.float32)
+        a = tf.get_variable("test", initializer=2.0, dtype=tf.float32)
+        return a*ones, 2*a*ones
 
 
 class Decoder(object):
@@ -80,10 +80,24 @@ class QASystem(object):
         :param args: pass in more arguments as needed
         """
 
+        #Load flags
+        self.dropout = tf.app.flags.FLAGS.dropout
+        self.batch_size = tf.app.flags.FLAGS.batch_size
+
+        #Set up encoder and decoder
+        self.encoder = encoder
+        self.decoder = decoder
+
         # ==== set up placeholder tokens ========
-        self.input_placeholder = tf.placeholder(shape=(None, self.max_length, encoder.vocab_dim), name="Input", dtype=tf.int32)
-        self.labels_placeholder = tf.placeholder(shape=(None, self.max_length), name="Labels", dtype=tf.int32)
-        self.mask_placeholder = tf.placeholder(shape=(None, self.max_length), name="Mask", dtype=tf.bool)
+        self.max_length_paragraph = 800
+        self.max_length_question = 100
+
+        self.question = tf.placeholder(shape=(None, self.max_length_paragraph, encoder.vocab_dim), name="Question", dtype=tf.int32)
+        self.paragraph = tf.placeholder(shape=(None, self.max_length_paragraph, encoder.vocab_dim), name="Paragraph", dtype=tf.int32)
+        self.label_start = tf.placeholder(shape=(None, self.max_length_paragraph), name="LabelStart", dtype=tf.int32)
+        self.label_end = tf.placeholder(shape=(None, self.max_length_paragraph), name="LabelEnd", dtype=tf.int32)
+        self.mask_question= tf.placeholder(shape=(None, self.max_length_question), name="MaskQuestion", dtype=tf.bool)
+        self.mask_paragraph = tf.placeholder(shape=(None, self.max_length_paragraph), name="MaskParagraph", dtype=tf.bool)
         self.dropout_placeholder = tf.placeholder(shape=(), name="Dropout", dtype=tf.float32)
 
 
@@ -94,8 +108,7 @@ class QASystem(object):
             self.setup_loss()
 
         # ==== set up training/updating procedure ====
-        self.pred = self.add_prediction_op()
-        self.loss = self.setup_loss(self.pred)
+        self.setup_loss()
         self.optimizer = get_optimizer("adam")
         self.train_op = self.optimizer.minimize(self.loss)
         #pass
@@ -109,8 +122,8 @@ class QASystem(object):
         :return:
         """
 
-        self.pred = self.decode(self.encode())
-        raise NotImplementedError("Connect all parts of your system here!")
+        self.pred_start, self.pred_end = self.encoder.encode(self.paragraph, self.question, self.mask_paragraph, self.mask_question, self.dropout_placeholder, 1)
+        #raise NotImplementedError("Connect all parts of your system here!")
 
 
     def setup_loss(self):
@@ -119,10 +132,12 @@ class QASystem(object):
         :return:
         """
         with vs.variable_scope("loss"):
-            self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.pred, labels=self.labels_placeholder)
-            self.loss = tf.boolean_mask(self.loss, self.mask_placeholder)
+            lossStart = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.pred_start, labels=self.label_start)
+            lossEnd = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.pred_end, labels=self.label_end)
+            self.loss = lossStart + lossEnd
+            self.loss = tf.boolean_mask(self.loss, self.mask_paragraph)
             self.loss = tf.reduce_mean(self.loss)
-            pass
+            #pass
 
     def setup_embeddings(self):
         """
@@ -132,52 +147,67 @@ class QASystem(object):
         with vs.variable_scope("embeddings"):
             pass
 
-    def optimize(self, session, train_x, train_y):
+    def set_feed_dict(self, x):
+        # Create masks
+
+        questions = []
+        paragraphs = []
+        masksQuestion = []
+        masksParagraph = []
+        labels_start = []
+        labels_end = []
+
+        for example in x:
+            maskParagraph = [1] * len(self.max_size_paragraph)
+            maskParagraph[len(example["ids.paragraph"]):] = 0
+            masksParagraph.append(maskParagraph)
+
+            maskQuestion = [1] * len(self.max_size_question)
+            maskQuestion[len(example["ids.question"]):] = 0
+            masksQuestion.append(maskQuestion)
+
+            questions.append(example["ids.question"])
+            paragraphs.append(example["ids.paragraph"])
+
+        # Create feed_dict
+        input_feed = {self.question: questions,
+                      self.paragraph: paragraphs,
+                      self.mask_question: maskParagraph,
+                      self.mask_paragraph: maskQuestion,
+                      self.dropout_placeholder: self.dropout}
+
+        if "labels_start" in x:
+            for example in x:
+                labels_start = example["labels_start"]
+                labels_end = example["labels_end"]
+
+            input_feed[self.label_start] = labels_start
+            input_feed[self.label_end] = labels_end
+
+        return input_feed
+
+    def optimize(self, session, train_x):#, train_y):
         """
         Takes in actual data to optimize your model
         This method is equivalent to a step() function
         :return:
         """
-        input_feed = {}
-
-        # fill in this feed_dictionary like:
-        # input_feed['train_x'] = train_x
-
-        output_feed = []
-
-        #Create mask
-        mask = np.ones(self.max_length)
-        mask[len(train_x):] = 0
-
-        #Create feed_dict
-        feed_dict = {self.input_placeholder: train_x,
-                     self.mask_placeholder: mask,
-                     self.dropout_placeholder: self.dropout}
-        if train_y is not None:
-            feed_dict[self.labels_placeholder] = train_y
-
-        _, loss = session.run([self.train_op, self.loss], feed_dict=feed_dict)
-        output_feed = loss
+        input_feed = self.set_feed_dict(train_x)
+        output_feed = [self.train_op, self.loss]
 
         outputs = session.run(output_feed, input_feed)
 
         return outputs
 
-    def test(self, session, valid_x, valid_y):
+    def test(self, session, valid_x):#, valid_y):
         """
         in here you should compute a cost for your validation set
         and tune your hyperparameters according to the validation set performance
         :return:
         """
-        input_feed = {}
-
-        # fill in this feed_dictionary like:
-        # input_feed['valid_x'] = valid_x
-
-        output_feed = []
-
+        input_feed = self.set_feed_dict(valid_x)
+        output_feed = [self.loss]
         outputs = session.run(output_feed, input_feed)
-
         return outputs
 
     def decode(self, session, test_x):
@@ -186,15 +216,9 @@ class QASystem(object):
         so that other methods like self.answer() will be able to work properly
         :return:
         """
-        input_feed = {}
-
-        # fill in this feed_dictionary like:
-        # input_feed['test_x'] = test_x
-
-        output_feed = []
-
+        input_feed = self.set_feed_dict(test_x)
+        output_feed = [self.pred_start, self.pred_end]
         outputs = session.run(output_feed, input_feed)
-
         return outputs
 
     def answer(self, session, test_x):
@@ -220,9 +244,8 @@ class QASystem(object):
         """
         valid_cost = 0
 
-        for valid_x, valid_y in valid_dataset:
-          valid_cost = self.test(sess, valid_x, valid_y)
-
+        for valid_x, in valid_dataset: #valid_y in valid_dataset:
+          valid_cost += self.test(sess, valid_x)#, valid_y)
 
         return valid_cost
 
@@ -249,8 +272,14 @@ class QASystem(object):
         examplesToEvaluate = np.random.choice(totExamples, sample)
 
         for i in examplesToEvaluate:
-            f1 += 0
-            em += 0
+            true_a_s = int(dataset[i]["span"][0])
+            true_a_e = int(dataset[i]["span"][1])
+            predicted_a_s, predicted_a_e = self.answer(session, dataset[i])
+            ground_truth = dataset[i]["ids.paragraph"][true_a_s:true_a_e+1]
+            prediction = dataset[i]["ids.paragraph"][predicted_a_s:predicted_a_e + 1]
+
+            f1 += f1_score(prediction, ground_truth)
+            em += exact_match_score(prediction, ground_truth)
         f1 /= sample
         em /= sample
 
@@ -258,6 +287,16 @@ class QASystem(object):
             logging.info("F1: {}, EM: {}, for {} samples".format(f1, em, sample))
 
         return f1, em
+
+
+    def run_epoch(self, sess, train_examples, dev_set, train_examples_raw, dev_set_raw):
+        prog = Progbar(target=1 + int(len(train_examples) / self.config.batch_size))
+        for i, batch in enumerate(minibatches(train_examples, self.config.batch_size)):
+            loss = self.train_on_batch(sess, *batch)
+            prog.update(i + 1, [("train loss", loss)])
+            if self.report: self.report.log_train_loss(loss)
+        print("")
+
 
     def train(self, session, dataset, train_dir):
         """
@@ -282,6 +321,29 @@ class QASystem(object):
         :param train_dir: path to the directory where you should save the model checkpoint
         :return:
         """
+        #loop through minibatches
+        #set samples from minibatch
+        #padding
+        #populate placeholders
+        #feed_dict(self.inputs: processedInouts[1:5])
+        #tf.train / tf.run
+
+        # Loop through epochs
+        numExamples = len(dataset)
+        firstExampleInBatch = 0
+
+        for epoch in range(tf.app.flags.FLAGS.epochs):
+            logging.info("Epoch %d out of %d", epoch + 1, tf.app.flags.FLAGS.epochs)
+
+            randomOrder = np.random.permutation(numExamples)
+
+            # Loop until we ran through the whole dataset
+            while firstExampleInBatch < numExamples:
+                currBatchStart = firstExampleInBatch
+                currBatchEnd = min(firstExampleInBatch + self.batch_size - 1, numExamples-1)
+                print(currBatchStart, currBatchEnd)
+                # Get ready for next batch
+                firstExampleInBatch += self.batch_size
 
         # some free code to print out number of parameters in your model
         # it's always good to check!
