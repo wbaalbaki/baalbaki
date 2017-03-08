@@ -118,7 +118,7 @@ class Encoder(object):
         pred_e = tf.stack(pred_e)
         pred_e = tf.transpose(pred_e, perm=[1, 0, 2])
 
-        return (pred_s, pred_e)
+        return pred_s, pred_e
 
 
 class Decoder(object):
@@ -152,24 +152,18 @@ class QASystem(object):
 
         #Load flags
         self.dropout = tf.app.flags.FLAGS.dropout
-        self.batch_size = 3#tf.app.flags.FLAGS.batch_size
+        self.batch_size = tf.app.flags.FLAGS.batch_size
+        self.embedPath = tf.app.flags.FLAGS.embed_path
+        self.numEpochs = tf.app.flags.FLAGS.epochs
 
         #Set up encoder and decoder
         self.encoder = encoder
         self.decoder = decoder
 
         # ==== set up placeholder tokens ========
-        self.max_length_paragraph = 800
+        self.max_length_paragraph = tf.app.flags.FLAGS.output_size
         self.max_length_question = 100
-
-        self.question = tf.placeholder(shape=(None, self.max_length_question), name="Question", dtype=tf.int32)
-        self.paragraph = tf.placeholder(shape=(None, self.max_length_paragraph), name="Paragraph", dtype=tf.int32)
-        self.label_start = tf.placeholder(shape=(None, self.max_length_paragraph), name="LabelStart", dtype=tf.int32)
-        self.label_end = tf.placeholder(shape=(None, self.max_length_paragraph), name="LabelEnd", dtype=tf.int32)
-        self.mask_question = tf.placeholder(shape=(None, self.max_length_question), name="MaskQuestion", dtype=tf.bool)
-        self.mask_paragraph = tf.placeholder(shape=(None, self.max_length_paragraph), name="MaskParagraph", dtype=tf.bool)
-        self.dropout_placeholder = tf.placeholder(shape=(), name="Dropout", dtype=tf.float32)
-
+        self.setup_placeholders()
 
         # ==== assemble pieces ====
         with tf.variable_scope("qa", initializer=tf.uniform_unit_scaling_initializer(1.0)):
@@ -182,6 +176,14 @@ class QASystem(object):
         self.train_op = self.optimizer.minimize(self.loss)
         #pass
 
+    def setup_placeholders(self):
+        self.question = tf.placeholder(shape=(None, self.max_length_question), name="Question", dtype=tf.int32)
+        self.paragraph = tf.placeholder(shape=(None, self.max_length_paragraph), name="Paragraph", dtype=tf.int32)
+        self.label_start = tf.placeholder(shape=(None, self.max_length_paragraph), name="LabelStart", dtype=tf.int32)
+        self.label_end = tf.placeholder(shape=(None, self.max_length_paragraph), name="LabelEnd", dtype=tf.int32)
+        self.mask_question = tf.placeholder(shape=(None, self.max_length_question), name="MaskQuestion", dtype=tf.bool)
+        self.mask_paragraph = tf.placeholder(shape=(None, self.max_length_paragraph), name="MaskParagraph", dtype=tf.bool)
+        self.dropout_placeholder = tf.placeholder(shape=(), name="Dropout", dtype=tf.float32)
 
     def setup_system(self):
         """
@@ -214,7 +216,7 @@ class QASystem(object):
         :return:
         """
         with vs.variable_scope("embeddings"):
-            embedds = np.load("data/squad/glove.trimmed.100.npz")
+            embedds = np.load("data/squad/glove.trimmed.100.npz")#self.embedPath)
             self.embeddings = tf.Variable(embedds["glove"])
 
     def pad_sequence(self, sequence, max_length):
@@ -224,7 +226,7 @@ class QASystem(object):
             mask = [1] * max_length
         else:
             ret = sequence + [PAD_ID] * (max_length - currLen)
-            mask = [1] * currLen + [0] * (max_length - currLen)
+            mask = [True] * currLen + [False] * (max_length - currLen)
 
         return [int(el) for el in ret], mask
 
@@ -306,31 +308,31 @@ class QASystem(object):
         input_feed = self.set_feed_dict(test_x)
         output_feed = [self.pred_start, self.pred_end]
         outputs = session.run(output_feed, input_feed)
-        out_s = outputs[0][0]
-        out_e = outputs[1][0]
 
-        print(np.shape(outputs), np.shape(out_s), np.shape(out_e))
-        print(self.mask_paragraph)
-        exit()
+        #out_s = outputs[0][0]
+        #out_e = outputs[1][0]
+        #out_s = tf.boolean_mask(out_s, tf.transpose(self.mask_paragraph, name='boolean_mask', perm=[1, 0]))
+        #out_e = tf.boolean_mask(out_e, tf.transpose(self.mask_paragraph, name='boolean_mask', perm=[1, 0]))
+        #return out_s, out_e
 
-        out_s = [out_s[i] for i in range(self.max_length_paragraph) if self.mask_paragraph[i]==1]
-        out_e = [out_s[i] for i in range(self.max_length_paragraph) if self.mask_paragraph[i]==1]
-
-        print(np.shape(outputs), np.shape(out_s), np.shape(out_e))
-        return out_s, out_e
-        #return outputs
+        return outputs
 
     def answer(self, session, test_x):
 
         yp, yp2 = self.decode(session, test_x)
 
-        print(yp, '\n ', yp2, '\n \n \n \n \n \n')
+        # Might need to change deppending on the output format
+        numWords = len(test_x["ids.paragraph"])
+        yp = yp[0][:, 1][:numWords]
+        yp2 = yp2[0][:, 1][:numWords]
+        a_s = np.argmax(yp)
+        a_e = np.argmax(yp2)
 
-        a_s = np.argmax(yp, axis=1)
-        a_e = np.argmax(yp2, axis=1)
+        #a_s = np.argmax(yp, axis=1)
+        #a_e = np.argmax(yp2, axis=1)
         #a_s = 1
         #a_e = 2
-        print(a_s, ' \n', a_e)
+
         if a_s < a_e:
             return (a_s, a_e)
         else:
@@ -381,13 +383,15 @@ class QASystem(object):
             true_a_s = int(dataset[i]["span"][0])
             true_a_e = int(dataset[i]["span"][1])
             predicted_a_s, predicted_a_e = self.answer(session, dataset[i])
-            ground_truth = dataset[i]["ids.paragraph"][true_a_s:true_a_e+1]
-            #print(predicted_a_s, predicted_a_e)
-            #exit()
-            prediction = dataset[i]["ids.paragraph"][predicted_a_s:predicted_a_e + 1]
+            ground_truth = dataset[i]["paragraph"][true_a_s:true_a_e+1]
+            prediction = dataset[i]["paragraph"][predicted_a_s:predicted_a_e + 1]
 
+            #Turn into a sentence
+            ground_truth = ' '.join(ground_truth)
+            prediction = ' '.join(prediction)
+
+            em += float(exact_match_score(prediction, ground_truth))
             f1 += f1_score(prediction, ground_truth)
-            em += exact_match_score(prediction, ground_truth)
         f1 /= sample
         em /= sample
 
@@ -422,25 +426,51 @@ class QASystem(object):
 
         # Loop through epochs
         numExamples = len(dataset)
+        totBatches = numExamples/self.batch_size
 
-        for epoch in range(2):#tf.app.flags.FLAGS.epochs):
-            logging.info("Epoch %d out of %d", epoch + 1, tf.app.flags.FLAGS.epochs)
+        for epoch in range(self.numEpochs):
+            tic = time.time()
+            logging.info("\n\n\nEpoch %d out of %d", epoch + 1, tf.app.flags.FLAGS.epochs)
 
             randomOrder = np.random.permutation(numExamples)
 
             firstExampleInBatch = 0
             # Loop until we ran through the whole dataset
+            batches = 0
             while firstExampleInBatch < numExamples:
                 # Prepare minibatch
                 currBatchStart = firstExampleInBatch
                 currBatchEnd = min(firstExampleInBatch + self.batch_size - 1, numExamples - 1)
                 currExamples = [dataset[randomOrder[i]] for i in range(currBatchStart, currBatchEnd+1)]
 
+                # Set the max length paragraph and question according to the minibatch
+                sizeParagraphs = []
+                sizeQuestions = []
+                for example in currExamples:
+                    sizeParagraphs.append(len(example["ids.paragraph"]))
+                    sizeQuestions.append(len(example["ids.question"]))
+                #self.max_length_paragraph = np.max(sizeParagraphs)
+                #self.max_length_question = np.max(sizeQuestions)
+                #print(self.max_length_paragraph, self.max_length_question)
+                #self.setup_placeholders()
+
                 # Train
                 self.optimize(session, currExamples)
 
+                if batches % 200 == 0:
+                    logging.info("%d batches out of %d", batches, totBatches)
+
                 # Get ready for next batch
                 firstExampleInBatch += self.batch_size
+                batches += 1
+
+            # Print current progress
+            toc = time.time()
+            logging.info("\n\nLast epoch took: %f secs" % (toc - tic))
+
+            self.evaluate_answer(session, dataset, sample=100, log=True)
+
+
 
             # Save model after each epoch
             saver = tf.train.Saver()
@@ -451,6 +481,10 @@ class QASystem(object):
         # you will also want to save your model parameters in train_dir
         # so that you can use your trained model to make predictions, or
         # even continue training
+
+        # Set parameters back to default so can perform predictions
+        self.max_length_paragraph = tf.app.flags.FLAGS.output_size
+        self.max_length_question = 100
 
         tic = time.time()
         params = tf.trainable_variables()
