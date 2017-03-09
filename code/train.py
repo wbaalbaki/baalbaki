@@ -19,7 +19,13 @@ tf.app.flags.DEFINE_float("max_gradient_norm", 10.0, "Clip gradients to this nor
 tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
 tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("epochs", 10, "Number of epochs to train.")
-tf.app.flags.DEFINE_integer("state_size", 200, "Size of each model layer.")
+tf.app.flags.DEFINE_integer("state_size", 20, "Size of each model layer.") #CHAAAANGE HEREEEEEEEEEEEEEEEEE
+
+#CHAAAANGE HEREEEEEEEEEEEEEEEEE
+#CHAAAANGE HEREEEEEEEEEEEEEEEEE
+#CHAAAANGE HEREEEEEEEEEEEEEEEEE
+#CHAAAANGE HEREEEEEEEEEEEEEEEEE
+
 tf.app.flags.DEFINE_integer("output_size", 750, "The output size of your model.")
 tf.app.flags.DEFINE_integer("embedding_size", 100, "Size of the pretrained vocabulary.")
 tf.app.flags.DEFINE_string("data_dir", "data/squad", "SQuAD directory (default ./data/squad)")
@@ -191,7 +197,7 @@ def main(_):
     with open(os.path.join(FLAGS.log_dir, "flags.json"), 'w') as fout:
         json.dump(FLAGS.__flags, fout)
 
-    with tf.Session() as sess:
+    with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
         load_train_dir = get_normalized_train_dir(FLAGS.load_train_dir or FLAGS.train_dir)
         initialize_model(sess, qa, load_train_dir)
 
