@@ -97,21 +97,26 @@ class Encoder(object):
         # Define weights
         #weights = {'out': tf.get_variable("W", shape=[n_hidden, 2], initializer=tf.contrib.layers.xavier_initializer())}
         #biases = {'out': tf.get_variable("b", shape=[2], initializer=tf.contrib.layers.xavier_initializer())}
-
         W_s = tf.get_variable("W_s", shape=(self.vocab_dim, 2), initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float64)
         b_s = tf.get_variable("b_s", shape=2, initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float64)
 
         W_e = tf.get_variable("W_e", shape=(self.vocab_dim, 2), initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float64)
         b_e = tf.get_variable("b_e", shape=2, initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float64)
 
-        tf.get_variable_scope().reuse_variables()
 
         pred_s = []
         pred_e = []
-        for time_step in range(max_length_paragraph):
-            pred_s.append(tf.matmul(embeddedParagraph[:,time_step,:], W_s) + b_s)
-            pred_e.append(tf.matmul(embeddedParagraph[:,time_step,:], W_e) + b_e)
 
+        with tf.variable_scope("LogisticRegression"):
+            for time_step in range(max_length_paragraph):
+                if time_step > 0:
+                    tf.get_variable_scope().reuse_variables()
+
+                pred_s.append(tf.matmul(embeddedParagraph[:,time_step,:], W_s) + b_s)
+                pred_e.append(tf.matmul(embeddedParagraph[:,time_step,:], W_e) + b_e)
+
+
+        # Stack and return
         pred_s = tf.stack(pred_s)
         pred_s = tf.transpose(pred_s, perm=[1, 0, 2])
 
@@ -152,9 +157,10 @@ class QASystem(object):
 
         #Load flags
         self.dropout = tf.app.flags.FLAGS.dropout
-        self.batch_size = tf.app.flags.FLAGS.batch_size
+        self.batch_size = tf.app.flags.FLAGS.batch_size#3
+        self.numEpochs = tf.app.flags.FLAGS.epochs#2
+        self.batchesToDisplay = 200
         self.embedPath = tf.app.flags.FLAGS.embed_path
-        self.numEpochs = tf.app.flags.FLAGS.epochs
 
         #Set up encoder and decoder
         self.encoder = encoder
@@ -217,7 +223,7 @@ class QASystem(object):
         """
         with vs.variable_scope("embeddings"):
             embedds = np.load("data/squad/glove.trimmed.100.npz")#self.embedPath)
-            self.embeddings = tf.Variable(embedds["glove"])
+            self.embeddings = tf.Variable(embedds["glove"], trainable=False)
 
     def pad_sequence(self, sequence, max_length):
         currLen = len(sequence)
@@ -457,7 +463,7 @@ class QASystem(object):
                 # Train
                 self.optimize(session, currExamples)
 
-                if batches % 200 == 0:
+                if batches % self.batchesToDisplay == 0:
                     logging.info("%d batches out of %d", batches, totBatches)
 
                 # Get ready for next batch
