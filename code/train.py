@@ -19,7 +19,7 @@ tf.app.flags.DEFINE_float("max_gradient_norm", 10.0, "Clip gradients to this nor
 tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
 tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("epochs", 10, "Number of epochs to train.")
-tf.app.flags.DEFINE_integer("state_size", 200, "Size of each model layer.") #CHAAAANGE HEREEEEEEEEEEEEEEEEE
+tf.app.flags.DEFINE_integer("state_size", 20, "Size of each model layer.") #CHAAAANGE HEREEEEEEEEEEEEEEEEE
 
 #CHAAAANGE HEREEEEEEEEEEEEEEEEE
 #CHAAAANGE HEREEEEEEEEEEEEEEEEE
@@ -176,7 +176,7 @@ def main(_):
     # Do what you need to load datasets from FLAGS.data_dir
     datasetTrain, datasetVal = initialize_datasets(FLAGS.data_dir)
     # THIS IS JUST TO DEBUG, CHANGE LATER!!!!!
-    #datasetTrain = datasetTrain[0:200]
+    datasetTrain = datasetTrain[0:200]
 
 
     embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))

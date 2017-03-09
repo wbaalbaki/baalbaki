@@ -29,8 +29,8 @@ class Encoder(object):
     def __init__(self, size, vocab_dim):
         self.size = size
         self.vocab_dim = vocab_dim
-        self.cell1 = tf.nn.rnn_cell.BasicLSTMCell(self.size)
-        self.cell2 = tf.nn.rnn_cell.BasicLSTMCell(self.size*2)
+        self.cell1 = tf.nn.rnn_cell.BasicLSTMCell(self.size)#, state_is_tuple=False)
+        self.cell2 = tf.nn.rnn_cell.BasicLSTMCell(self.size*2)#, state_is_tuple=False)
 
     # Takes a batch, a sequence length (length of the paragraph), weights and biases, the max length of a sequence, the dimension of the hidden state, and return the
     # output of an LSTM
@@ -43,7 +43,7 @@ class Encoder(object):
 
             lastStatesFw, lastStatesBw = states_1
             #print('\n\n\n', outputs_1, '\n\n\n', states_1, '\n\n\n', lastStatesFw[1], '\n\n\n')
-            #questionRepresentation = tf.concat(lastStatesFw[1], lastStatesBw[1])
+            #questionRepresentation = tf.concat(1, (lastStatesFw[1], lastStatesBw[1]))
             #print(questionRepresentation)
             #exit()
             questionRepresentation = tf.nn.rnn_cell.LSTMStateTuple(tf.concat(1, lastStatesFw), tf.concat(1, lastStatesBw))
@@ -52,8 +52,18 @@ class Encoder(object):
             paragraphLen = tf.reduce_sum(tf.cast(mask_paragraph, tf.int32), axis=1)
             outputs, states = tf.nn.bidirectional_dynamic_rnn(self.cell2, self.cell2, paragraph, sequence_length=paragraphLen,
                                                    initial_state_fw=questionRepresentation, initial_state_bw=questionRepresentation)
+
             questionContextRepresentation = outputs[1]
 
+        #Create attention vector
+        #with vs.variable_scope("Attention"):
+        #    attention = []
+
+         #   for time_step in paragraph.get_shape()[1]:
+
+
+        #print(questionContextStates)
+        #exit()
 
         #return questionContextRepresentation
         return self.encodeLinear(questionContextRepresentation, None)
@@ -138,10 +148,10 @@ class QASystem(object):
         """
 
         #Load flags
-        self.device_name = "/gpu:0"
-        self.batch_size = tf.app.flags.FLAGS.batch_size#3
-        self.numEpochs = tf.app.flags.FLAGS.epochs#2
-        self.batchesToDisplay = 500
+        self.device_name = "/cpu:0"
+        self.batch_size = 3#tf.app.flags.FLAGS.batch_size#3
+        self.numEpochs = 2#tf.app.flags.FLAGS.epochs#2
+        self.batchesToDisplay = 5#00
         self.embedPath = tf.app.flags.FLAGS.embed_path
         self.dropout = tf.app.flags.FLAGS.dropout
 
@@ -181,8 +191,8 @@ class QASystem(object):
         to assemble your reading comprehension system!
         :return:
         """
-        with tf.device(self.device_name):
-            self.pred_start, self.pred_end = self.encoder.encode(self.embeddedParagraph, self.embeddedQuestion,
+        #with tf.device(self.device_name):
+        self.pred_start, self.pred_end = self.encoder.encode(self.embeddedParagraph, self.embeddedQuestion,
                                                              self.mask_paragraph, self.mask_question, self.dropout_placeholder,
                                                              1, self.max_length_paragraph, tf.app.flags.FLAGS.state_size)
 
