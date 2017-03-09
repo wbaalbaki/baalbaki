@@ -40,8 +40,12 @@ class Encoder(object):
             questionLen = tf.reduce_sum(tf.cast(mask_question, tf.int32), axis=1)
             outputs_1, states_1 = tf.nn.bidirectional_dynamic_rnn(self.cell1, self.cell1, inputs=question,
                                                                         sequence_length=questionLen, dtype=tf.float64)
-            lastStatesFw, lastStatesBw = states_1
 
+            lastStatesFw, lastStatesBw = states_1
+            #print('\n\n\n', outputs_1, '\n\n\n', states_1, '\n\n\n', lastStatesFw[1], '\n\n\n')
+            #questionRepresentation = tf.concat(lastStatesFw[1], lastStatesBw[1])
+            #print(questionRepresentation)
+            #exit()
             questionRepresentation = tf.nn.rnn_cell.LSTMStateTuple(tf.concat(1, lastStatesFw), tf.concat(1, lastStatesBw))
 
         with vs.variable_scope("ReadParagraphAfterQuestion", reuse=None):
@@ -134,11 +138,12 @@ class QASystem(object):
         """
 
         #Load flags
-        self.dropout = tf.app.flags.FLAGS.dropout
+        self.device_name = "/gpu:0"
         self.batch_size = tf.app.flags.FLAGS.batch_size#3
         self.numEpochs = tf.app.flags.FLAGS.epochs#2
         self.batchesToDisplay = 500
         self.embedPath = tf.app.flags.FLAGS.embed_path
+        self.dropout = tf.app.flags.FLAGS.dropout
 
         #Set up encoder and decoder
         self.encoder = encoder
@@ -176,9 +181,12 @@ class QASystem(object):
         to assemble your reading comprehension system!
         :return:
         """
-        self.pred_start, self.pred_end = self.encoder.encode(self.embeddedParagraph, self.embeddedQuestion,
+        with tf.device(self.device_name):
+            self.pred_start, self.pred_end = self.encoder.encode(self.embeddedParagraph, self.embeddedQuestion,
                                                              self.mask_paragraph, self.mask_question, self.dropout_placeholder,
                                                              1, self.max_length_paragraph, tf.app.flags.FLAGS.state_size)
+
+
         #raise NotImplementedError("Connect all parts of your system here!")
 
     def setup_loss(self):
