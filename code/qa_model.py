@@ -29,8 +29,8 @@ class Encoder(object):
     def __init__(self, size, vocab_dim):
         self.size = size
         self.vocab_dim = vocab_dim
-        self.cell1 = tf.nn.rnn_cell.BasicLSTMCell(self.size)#, state_is_tuple=False)
-        self.cell2 = tf.nn.rnn_cell.BasicLSTMCell(self.size*2)#, state_is_tuple=False)
+        self.cell = tf.nn.rnn_cell.BasicLSTMCell(self.size)#, state_is_tuple=False)
+        self.finalCell = tf.nn.rnn_cell.BasicLSTMCell(self.size*4)  # , state_is_tuple=False)
 
     # Takes a batch, a sequence length (length of the paragraph), weights and biases, the max length of a sequence, the dimension of the hidden state, and return the
     # output of an LSTM
@@ -38,35 +38,53 @@ class Encoder(object):
 
         with vs.variable_scope("ReadQuestion", reuse=None):
             questionLen = tf.reduce_sum(tf.cast(mask_question, tf.int32), axis=1)
-            outputs_1, states_1 = tf.nn.bidirectional_dynamic_rnn(self.cell1, self.cell1, inputs=question,
+            outputs_1, states_1 = tf.nn.bidirectional_dynamic_rnn(self.cell, self.cell, inputs=question,
                                                                         sequence_length=questionLen, dtype=tf.float64)
 
+            # Get all of the hidden state of the question
+            hiddenStatesFw, hiddenStatesBw = outputs_1
+
+            # Get the last hidden state of each
             lastStatesFw, lastStatesBw = states_1
-            #print('\n\n\n', outputs_1, '\n\n\n', states_1, '\n\n\n', lastStatesFw[1], '\n\n\n')
-            #questionRepresentation = tf.concat(1, (lastStatesFw[1], lastStatesBw[1]))
-            #print(questionRepresentation)
-            #exit()
-            questionRepresentation = tf.nn.rnn_cell.LSTMStateTuple(tf.concat(1, lastStatesFw), tf.concat(1, lastStatesBw))
+            lastStateFwQuestion = lastStatesFw[1]
+            lastStateBwQuestion = lastStatesBw[1]
+
 
         with vs.variable_scope("ReadParagraphAfterQuestion", reuse=None):
             paragraphLen = tf.reduce_sum(tf.cast(mask_paragraph, tf.int32), axis=1)
-            outputs, states = tf.nn.bidirectional_dynamic_rnn(self.cell2, self.cell2, paragraph, sequence_length=paragraphLen,
-                                                   initial_state_fw=questionRepresentation, initial_state_bw=questionRepresentation)
+            outputs, states = tf.nn.bidirectional_dynamic_rnn(self.cell, self.cell, paragraph, sequence_length=paragraphLen,
+                                                    initial_state_fw=tf.nn.rnn_cell.LSTMStateTuple(tf.zeros_like(lastStateFwQuestion, dtype=tf.float64), lastStateFwQuestion),
+                                                    initial_state_bw=tf.nn.rnn_cell.LSTMStateTuple(tf.zeros_like(lastStateBwQuestion, dtype=tf.float64), lastStateBwQuestion))
 
-            questionContextRepresentation = outputs[1]
+            questionContextRepresentation_Fw = outputs[0]
+            questionContextRepresentation_Bw = outputs[1]
 
-        #Create attention vector
-        #with vs.variable_scope("Attention"):
-        #    attention = []
+        # Loop through all of this context representation to generate an attention vector
+        with vs.variable_scope("Ateention"):
+            W_att_fw = tf.get_variable("W_attention_fw", (self.size, self.size), dtype=tf.float64, initializer=tf.contrib.layers.xavier_initializer())
+            W_att_bw = tf.get_variable("W_attention_bw", (self.size, self.size), dtype=tf.float64, initializer=tf.contrib.layers.xavier_initializer())
 
-         #   for time_step in paragraph.get_shape()[1]:
+            #questCont_times_W_att_fw = tf.batch_matmul(questionContextRepresentation, tf.expand_dims(W_att_fw, 0))
+            #questCont_times_W_att_bw = tf.batch_matmul(questionContextRepresentation, W_att_bw)
 
+            questCont_times_W_att_fw = tf.scan(lambda a, x: tf.matmul(x, W_att_fw), questionContextRepresentation_Fw)
+            att_fw = tf.batch_matmul(questCont_times_W_att_fw, tf.transpose(hiddenStatesFw, perm = [0, 2, 1]))
+            toAppend_fw = tf.batch_matmul(att_fw, hiddenStatesFw)
 
-        #print(questionContextStates)
-        #exit()
+            questCont_times_W_att_bw = tf.scan(lambda a, x: tf.matmul(x, W_att_bw), questionContextRepresentation_Bw)
+            att_bw = tf.batch_matmul(questCont_times_W_att_bw, tf.transpose(hiddenStatesBw, perm=[0, 2, 1]))
+            toAppend_bw = tf.batch_matmul(att_bw, hiddenStatesBw)
+
+            questContAtt_Fw = tf.concat(2, (questionContextRepresentation_Fw, toAppend_fw))
+            questContAtt_Bw = tf.concat(2, (questionContextRepresentation_Bw, toAppend_bw))
+            questConcat = tf.concat(2, (questContAtt_Fw, questContAtt_Bw))
+
+        with vs.variable_scope("FinalLSTM", reuse=None):
+            outputs_final, states_final = tf.nn.dynamic_rnn(self.finalCell, questConcat, paragraphLen, dtype=tf.float64)
+
 
         #return questionContextRepresentation
-        return self.encodeLinear(questionContextRepresentation, None)
+        return self.encodeLinear(outputs_final, None)
 
 
     def encodeLinear(self, paragraph, max_length_paragraph):
@@ -86,10 +104,10 @@ class Encoder(object):
         """
 
         # Define weights
-        W_s = tf.get_variable("W_s", shape=(self.size*2, 2), initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float64)
+        W_s = tf.get_variable("W_s", shape=(self.size*4, 2), initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float64)
         b_s = tf.get_variable("b_s", shape=2, initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float64)
 
-        W_e = tf.get_variable("W_e", shape=(self.size*2, 2), initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float64)
+        W_e = tf.get_variable("W_e", shape=(self.size*4, 2), initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float64)
         b_e = tf.get_variable("b_e", shape=2, initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float64)
 
         pred_s = []
@@ -148,10 +166,9 @@ class QASystem(object):
         """
 
         #Load flags
-        self.device_name = "/cpu:0"
-        self.batch_size = 3#tf.app.flags.FLAGS.batch_size#3
-        self.numEpochs = 2#tf.app.flags.FLAGS.epochs#2
-        self.batchesToDisplay = 5#00
+        self.batch_size = tf.app.flags.FLAGS.batch_size#3
+        self.numEpochs = tf.app.flags.FLAGS.epochs#2
+        self.batchesToDisplay = 500
         self.embedPath = tf.app.flags.FLAGS.embed_path
         self.dropout = tf.app.flags.FLAGS.dropout
 
@@ -161,7 +178,7 @@ class QASystem(object):
 
         # ==== set up placeholder tokens ========
         self.max_length_paragraph = tf.app.flags.FLAGS.output_size
-        self.max_length_question = 100
+        self.max_length_question = 95
         self.setup_placeholders()
 
         # ==== assemble pieces ====

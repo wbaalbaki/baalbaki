@@ -19,7 +19,7 @@ tf.app.flags.DEFINE_float("max_gradient_norm", 10.0, "Clip gradients to this nor
 tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
 tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("epochs", 10, "Number of epochs to train.")
-tf.app.flags.DEFINE_integer("state_size", 20, "Size of each model layer.") #CHAAAANGE HEREEEEEEEEEEEEEEEEE
+tf.app.flags.DEFINE_integer("state_size", 100, "Size of each model layer.") #CHAAAANGE HEREEEEEEEEEEEEEEEEE
 
 #CHAAAANGE HEREEEEEEEEEEEEEEEEE
 #CHAAAANGE HEREEEEEEEEEEEEEEEEE
@@ -176,7 +176,7 @@ def main(_):
     # Do what you need to load datasets from FLAGS.data_dir
     datasetTrain, datasetVal = initialize_datasets(FLAGS.data_dir)
     # THIS IS JUST TO DEBUG, CHANGE LATER!!!!!
-    datasetTrain = datasetTrain[0:200]
+    #datasetTrain = datasetTrain[0:200]
 
 
     embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
@@ -197,7 +197,7 @@ def main(_):
     with open(os.path.join(FLAGS.log_dir, "flags.json"), 'w') as fout:
         json.dump(FLAGS.__flags, fout)
 
-    with tf.Session(config=tf.ConfigProto(log_device_placement=True)) as sess:
+    with tf.Session() as sess:
         load_train_dir = get_normalized_train_dir(FLAGS.load_train_dir or FLAGS.train_dir)
         initialize_model(sess, qa, load_train_dir)
 
