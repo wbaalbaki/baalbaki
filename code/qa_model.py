@@ -39,7 +39,7 @@ class Encoder(object):
         with vs.variable_scope("ReadQuestion", reuse=None):
             questionLen = tf.reduce_sum(tf.cast(mask_question, tf.int32), axis=1)
             outputs_1, states_1 = tf.nn.bidirectional_dynamic_rnn(self.cell, self.cell, inputs=question,
-                                                                        sequence_length=questionLen, dtype=tf.float64)
+                                                                        sequence_length=questionLen, dtype=tf.float32)
 
             # Get all of the hidden state of the question
             hiddenStatesFw, hiddenStatesBw = outputs_1
@@ -53,16 +53,16 @@ class Encoder(object):
         with vs.variable_scope("ReadParagraphAfterQuestion", reuse=None):
             paragraphLen = tf.reduce_sum(tf.cast(mask_paragraph, tf.int32), axis=1)
             outputs, states = tf.nn.bidirectional_dynamic_rnn(self.cell, self.cell, paragraph, sequence_length=paragraphLen,
-                                                    initial_state_fw=tf.nn.rnn_cell.LSTMStateTuple(tf.zeros_like(lastStateFwQuestion, dtype=tf.float64), lastStateFwQuestion),
-                                                    initial_state_bw=tf.nn.rnn_cell.LSTMStateTuple(tf.zeros_like(lastStateBwQuestion, dtype=tf.float64), lastStateBwQuestion))
+                                                    initial_state_fw=tf.nn.rnn_cell.LSTMStateTuple(tf.zeros_like(lastStateFwQuestion, dtype=tf.float32), lastStateFwQuestion),
+                                                    initial_state_bw=tf.nn.rnn_cell.LSTMStateTuple(tf.zeros_like(lastStateBwQuestion, dtype=tf.float32), lastStateBwQuestion))
 
             questionContextRepresentation_Fw = outputs[0]
             questionContextRepresentation_Bw = outputs[1]
 
         # Loop through all of this context representation to generate an attention vector
         with vs.variable_scope("Ateention"):
-            W_att_fw = tf.get_variable("W_attention_fw", (self.size, self.size), dtype=tf.float64, initializer=tf.contrib.layers.xavier_initializer())
-            W_att_bw = tf.get_variable("W_attention_bw", (self.size, self.size), dtype=tf.float64, initializer=tf.contrib.layers.xavier_initializer())
+            W_att_fw = tf.get_variable("W_attention_fw", (self.size, self.size), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+            W_att_bw = tf.get_variable("W_attention_bw", (self.size, self.size), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
 
             #questCont_times_W_att_fw = tf.batch_matmul(questionContextRepresentation, tf.expand_dims(W_att_fw, 0))
             #questCont_times_W_att_bw = tf.batch_matmul(questionContextRepresentation, W_att_bw)
@@ -80,7 +80,7 @@ class Encoder(object):
             questConcat = tf.concat(2, (questContAtt_Fw, questContAtt_Bw))
 
         with vs.variable_scope("FinalLSTM", reuse=None):
-            outputs_final, states_final = tf.nn.dynamic_rnn(self.finalCell, questConcat, paragraphLen, dtype=tf.float64)
+            outputs_final, states_final = tf.nn.dynamic_rnn(self.finalCell, questConcat, paragraphLen, dtype=tf.float32)
 
 
         #return questionContextRepresentation
@@ -104,11 +104,11 @@ class Encoder(object):
         """
 
         # Define weights
-        W_s = tf.get_variable("W_s", shape=(self.size*4, 2), initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float64)
-        b_s = tf.get_variable("b_s", shape=2, initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float64)
+        W_s = tf.get_variable("W_s", shape=(self.size*4, 2), initializer=tf.contrib.layers.xavier_initializer(), dtype=tf.float32)
+        b_s = tf.get_variable("b_s", shape=2, initializer=tf.contrib.layers.xavier_initializer(), dtype=tf.float32)
 
-        W_e = tf.get_variable("W_e", shape=(self.size*4, 2), initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float64)
-        b_e = tf.get_variable("b_e", shape=2, initializer=tf.contrib.layers.xavier_initializer(), dtype=np.float64)
+        W_e = tf.get_variable("W_e", shape=(self.size*4, 2), initializer=tf.contrib.layers.xavier_initializer(), dtype=tf.float32)
+        b_e = tf.get_variable("b_e", shape=2, initializer=tf.contrib.layers.xavier_initializer(), dtype=tf.float32)
 
         pred_s = []
         pred_e = []
@@ -199,7 +199,7 @@ class QASystem(object):
         self.label_end = tf.placeholder(shape=(None, self.max_length_paragraph), name="LabelEnd", dtype=tf.int32)
         self.mask_question = tf.placeholder(shape=(None, self.max_length_question), name="MaskQuestion", dtype=tf.bool)
         self.mask_paragraph = tf.placeholder(shape=(None, self.max_length_paragraph), name="MaskParagraph", dtype=tf.bool)
-        self.dropout_placeholder = tf.placeholder(shape=(), name="Dropout", dtype=tf.float64)
+        self.dropout_placeholder = tf.placeholder(shape=(), name="Dropout", dtype=tf.float32)
 
     def setup_system(self):
         """
@@ -224,6 +224,7 @@ class QASystem(object):
         with vs.variable_scope("loss"):
             lossStart = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.pred_start, labels=self.label_start)
             lossEnd = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.pred_end, labels=self.label_end)
+
             self.loss = lossStart + lossEnd
             self.loss = tf.boolean_mask(self.loss, self.mask_paragraph)
             self.loss = tf.reduce_mean(self.loss)
@@ -236,7 +237,7 @@ class QASystem(object):
         """
         with vs.variable_scope("embeddings"):
             embedds = np.load("data/squad/glove.trimmed.100.npz")#self.embedPath)
-            self.embeddings = tf.Variable(embedds["glove"], trainable=False)
+            self.embeddings = tf.Variable(embedds["glove"], trainable=False, dtype=tf.float32)
             self.embeddedParagraph = tf.nn.embedding_lookup(self.embeddings, self.paragraph)
             self.embeddedQuestion = tf.nn.embedding_lookup(self.embeddings, self.question)
 
@@ -249,7 +250,7 @@ class QASystem(object):
             ret = sequence + [PAD_ID] * (max_length - currLen)
             mask = [True] * currLen + [False] * (max_length - currLen)
 
-        return [int(el) for el in ret], mask
+        return ret, mask
 
     def set_feed_dict(self, x):
         # Create masks
@@ -372,7 +373,7 @@ class QASystem(object):
 
         return valid_cost
 
-    def evaluate_answer(self, session, dataset, sample=100, log=False):
+    def evaluate_answer(self, session, dataset, vocab, sample=100, log=False):
         """
         Evaluate the model's performance using the harmonic mean of F1 and Exact Match (EM)
         with the set of true answer labels
@@ -398,8 +399,9 @@ class QASystem(object):
             true_a_s = int(dataset[i]["span"][0])
             true_a_e = int(dataset[i]["span"][1])
             predicted_a_s, predicted_a_e = self.answer(session, dataset[i])
-            ground_truth = dataset[i]["paragraph"][true_a_s:true_a_e+1]
-            prediction = dataset[i]["paragraph"][predicted_a_s:predicted_a_e + 1]
+            paragraphWords = [vocab[j] for j in dataset[i]["ids.paragraph"]]
+            ground_truth = paragraphWords[true_a_s:true_a_e+1]
+            prediction = paragraphWords[predicted_a_s:predicted_a_e + 1]
 
             #Turn into a sentence
             ground_truth = ' '.join(ground_truth)
@@ -415,7 +417,7 @@ class QASystem(object):
 
         return f1, em
 
-    def train(self, session, dataset, train_dir):
+    def train(self, session, dataset, train_dir, vocab):
         """
         Implement main training loop
 
@@ -479,7 +481,7 @@ class QASystem(object):
             toc = time.time()
             logging.info("\n\nLast epoch took: %f secs" % (toc - tic))
 
-            self.evaluate_answer(session, dataset, sample=100, log=True)
+            self.evaluate_answer(session, dataset, vocab, sample=100, log=True)
 
             # Save model after each epoch
             saver = tf.train.Saver()
