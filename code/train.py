@@ -7,7 +7,7 @@ import json
 
 import tensorflow as tf
 
-from qa_model3 import Encoder, QASystem, Decoder
+from qa_model import Encoder, QASystem, Decoder
 from os.path import join as pjoin
 from qa_data import PAD_ID
 
