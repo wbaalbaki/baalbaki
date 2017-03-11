@@ -70,7 +70,6 @@ class Encoder(object):
 
         outputs_final = tf.concat(2, outputs)
 
-
         #return questionContextRepresentation
         return self.encodeLinear(outputs_final, None, dropout_rate)
         #return self.encodeLinear(tf.concat(2, (outputs[0], outputs[1])), None)
@@ -95,15 +94,15 @@ class Encoder(object):
         #W_s = tf.get_variable("W_s", shape=(paragraph.get_shape()[2], 2), initializer=tf.contrib.layers.xavier_initializer(), dtype=tf.float32)
         #b_s = tf.get_variable("b_s", shape=2, initializer=tf.contrib.layers.xavier_initializer(), dtype=tf.float32)
 
-        W_s = tf.constant(tf.ones(paragraph.get_shape()[2], dtype=tf.float32))
-        b_s = tf.constant(tf.zeros(paragraph.get_shape()[2], dtype=tf.float32))
+        W_s = tf.ones(shape=(paragraph.get_shape()[2], 2), dtype=tf.float32)
+        b_s = tf.zeros(shape=2, dtype=tf.float32)
 
 
         #W_e = tf.get_variable("W_e", shape=(paragraph.get_shape()[2], 2), initializer=tf.contrib.layers.xavier_initializer(), dtype=tf.float32)
         #b_e = tf.get_variable("b_e", shape=2, initializer=tf.contrib.layers.xavier_initializer(), dtype=tf.float32)
 
-        W_e = tf.constant(tf.ones(paragraph.get_shape()[2], dtype=tf.float32))
-        b_e = tf.constant(tf.zeros(paragraph.get_shape()[2], dtype=tf.float32))
+        W_e = tf.ones(shape=(paragraph.get_shape()[2], 2), dtype=tf.float32)
+        b_e = tf.zeros(shape=2, dtype=tf.float32)
 
         pred_s = []
         pred_e = []

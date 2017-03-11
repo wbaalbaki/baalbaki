@@ -87,7 +87,7 @@ class Decoder(object):
     def __init__(self, output_size):
         self.output_size = output_size
 
-    def decode(self, knowledge_rep, dropout=None):
+    def decode(self, knowledge_rep):
         """
         takes in a knowledge representation
         and output a probability estimation over
@@ -114,13 +114,9 @@ class Decoder(object):
         with vs.variable_scope("Decoder", reuse=True):
             for time_step in range(knowledge_rep.get_shape()[1]):
                 x = knowledge_rep[:, time_step, :]
+                summaryRep_s.append(tf.matmul(x, W_s) + b_s)
+                summaryRep_e.append(tf.matmul(x, W_e) + b_e)
 
-                if dropout is not None:
-                    summaryRep_s.append(tf.matmul(tf.nn.dropout(x, dropout), W_s) + b_s)
-                    summaryRep_e.append(tf.matmul(tf.nn.dropout(x, dropout), W_e) + b_e)
-                else:
-                    summaryRep_s.append(tf.matmul(x, W_s) + b_s)
-                    summaryRep_e.append(tf.matmul(x, W_e) + b_e)
 
         output_s = tf.transpose(tf.stack(summaryRep_s), perm=[1, 0, 2])
         output_s = tf.reshape(output_s, [-1, max_length])
@@ -155,7 +151,7 @@ class QASystem(object):
         self.dropout = FLAGS.dropout
         self.starter_learning_rate = FLAGS.learning_rate
 
-        self.batchesToDisplay = 500
+        self.batchesToDisplay = 3
 
 
         # ==== set up placeholder tokens ========
@@ -190,7 +186,7 @@ class QASystem(object):
         """
         encodedState = self.encoder.encode(inputs=(self.embeddedQuestion, self.embeddedContext),
                                                  masks=(self.p_mask_question, self.p_mask_context))
-        self.pred_s, self.pred_e = self.decoder.decode(encodedState, self.p_keep_prob_dropout_placeholder)
+        self.pred_s, self.pred_e = self.decoder.decode(encodedState)
         #raise NotImplementedError("Connect all parts of your system here!")
 
 
