@@ -43,6 +43,7 @@ class Encoder(object):
         self.size = size
         self.vocab_dim = vocab_dim
         self.LSTMcell = tf.nn.rnn_cell.BasicLSTMCell(self.size)
+        self.CompresserLSTMcell = tf.nn.rnn_cell.BasicLSTMCell(1)
 
     def encode(self, inputs, masks, encoder_state_input=None):
         """
@@ -67,19 +68,50 @@ class Encoder(object):
 
         # Question LSTM
         with vs.variable_scope("LSTMQuestionCOntext", reuse=None):
-            _, statesQuestion = tf.nn.dynamic_rnn(cell=self.LSTMcell, inputs=question,
+            # Biderectional
+            _, (statesQuestion_fw, statesQuestion_bw)  = tf.nn.bidirectional_dynamic_rnn(self.LSTMcell, self.LSTMcell, inputs=question,
                                                                 sequence_length=questionLen, dtype=tf.float32)
 
+            # Uniderectional
+            #_, statesQuestion = tf.nn.dynamic_rnn(cell=self.LSTMcell, inputs=question,
+            #                                                    sequence_length=questionLen, dtype=tf.float32)
+
         with vs.variable_scope("LSTMQuestionCOntext", reuse=True):
-            outputsQuestionContext, _ = tf.nn.dynamic_rnn(cell=self.LSTMcell, inputs=context,
-                                                                              sequence_length=contextLen, dtype=tf.float32,
-                                                                              initial_state=statesQuestion)
+            # Biderectional
+            #(outputsFw, outputsBw)
+            outputs, _ = tf.nn.bidirectional_dynamic_rnn(self.LSTMcell, self.LSTMcell, inputs=context,
+                                                          sequence_length=contextLen, dtype=tf.float32,
+                                                          initial_state_fw=statesQuestion_fw,
+                                                          initial_state_bw=statesQuestion_bw)
+            questionContext = tf.concat(2, outputs)
+
+            # Uniderectional
+            #outputsQuestionContext, _ = tf.nn.dynamic_rnn(cell=self.LSTMcell, inputs=context,
+            #                                                                  sequence_length=contextLen, dtype=tf.float32,
+            #                                                                  initial_state=statesQuestion)
+
+
+        with vs.variable_scope("Compresser", reuse=False):
+            #(oneDimOutputs_fw, oneDimOutputs_bw)
+            oneDimOutputs, _ = tf.nn.bidirectional_dynamic_rnn(self.CompresserLSTMcell,
+                                                          self.CompresserLSTMcell, inputs=questionContext,
+                                                          sequence_length=contextLen, dtype=tf.float32)
+
 
         #output = tf.reduce_sum(context, 1)
-        output = outputsQuestionContext
-        #output = h_states # remove, and use the above one
+        #_, max_length, _ = oneDimOutputs_fw.get_shape().as_list()
+        #oneDimOutputs_fw = tf.reshape(oneDimOutputs_fw, [-1, max_length])
+        #oneDimOutputs_bw = tf.reshape(oneDimOutputs_bw, [-1, max_length])
+        #output = (oneDimOutputs_fw, oneDimOutputs_bw)
+        #return output  # Shape is [batch_size, max_length, encoded_size]        ## Must be a state of shape (None, some_enconder_number)
 
-        return output # Shape is [batch_size, max_length, encoded_size]        ## Must be a state of shape (None, some_enconder_number)
+        oneDimOutputs = tf.concat(1, oneDimOutputs)
+        _, max_length, _ = oneDimOutputs.get_shape().as_list()
+
+        oneDimOutputs = tf.reshape(oneDimOutputs, [-1, max_length])
+
+        return(oneDimOutputs)
+
 
 
 
@@ -100,35 +132,42 @@ class Decoder(object):
         :return:
         """
 
-        _, max_length, encoded_size = knowledge_rep.get_shape().as_list()
+        with vs.variable_scope("Decoder", reuse=False):
+            output_s = tf.contrib.layers.fully_connected(inputs=knowledge_rep, num_outputs=self.output_size,
+                                                         weights_initializer=tf.contrib.layers.xavier_initializer())
+            output_e = tf.contrib.layers.fully_connected(inputs=knowledge_rep, num_outputs=self.output_size,
+                                                         weights_initializer=tf.contrib.layers.xavier_initializer())
+        return (output_s, output_e)
 
-        with vs.variable_scope("Decoder", reuse=None):
-            W_s = tf.get_variable("W_s", shape=(encoded_size, 1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
-            b_s = tf.get_variable("b_s", shape=(1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+        #_, max_length, encoded_size = knowledge_rep.get_shape().as_list()
 
-            W_e = tf.get_variable("W_e", shape=(encoded_size, 1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
-            b_e = tf.get_variable("b_e", shape=(1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+        #with vs.variable_scope("Decoder", reuse=None):
+        #    W_s = tf.get_variable("W_s", shape=(encoded_size, 1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+        #    b_s = tf.get_variable("b_s", shape=(1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
 
-        summaryRep_s = []
-        summaryRep_e = []
-        with vs.variable_scope("Decoder", reuse=True):
-            for time_step in range(knowledge_rep.get_shape()[1]):
-                x = knowledge_rep[:, time_step, :]
+        #    W_e = tf.get_variable("W_e", shape=(encoded_size, 1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+        #    b_e = tf.get_variable("b_e", shape=(1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
 
-                if dropout is not None:
-                    summaryRep_s.append(tf.matmul(tf.nn.dropout(x, dropout), W_s) + b_s)
-                    summaryRep_e.append(tf.matmul(tf.nn.dropout(x, dropout), W_e) + b_e)
-                else:
-                    summaryRep_s.append(tf.matmul(x, W_s) + b_s)
-                    summaryRep_e.append(tf.matmul(x, W_e) + b_e)
+        #summaryRep_s = []
+        #summaryRep_e = []
+        #with vs.variable_scope("Decoder", reuse=True):
+        #    for time_step in range(knowledge_rep.get_shape()[1]):
+        #        x = knowledge_rep[:, time_step, :]
 
-        output_s = tf.transpose(tf.stack(summaryRep_s), perm=[1, 0, 2])
-        output_s = tf.reshape(output_s, [-1, max_length])
+        #        if dropout is not None:
+        #            summaryRep_s.append(tf.matmul(tf.nn.dropout(x, dropout), W_s) + b_s)
+        #            summaryRep_e.append(tf.matmul(tf.nn.dropout(x, dropout), W_e) + b_e)
+        #        else:
+        #            summaryRep_s.append(tf.matmul(x, W_s) + b_s)
+        #            summaryRep_e.append(tf.matmul(x, W_e) + b_e)
 
-        output_e = tf.transpose(tf.stack(summaryRep_e), perm=[1, 0, 2])
-        output_e = tf.reshape(output_e, [-1, max_length])
+        #output_s = tf.transpose(tf.stack(summaryRep_s), perm=[1, 0, 2])
+        #output_s = tf.reshape(output_s, [-1, max_length])
 
-        return (output_s, output_e) #Must be of shape (None, Max_Context_Length)
+        #output_e = tf.transpose(tf.stack(summaryRep_e), perm=[1, 0, 2])
+        #output_e = tf.reshape(output_e, [-1, max_length])
+
+        #return (output_s, output_e) #Must be of shape (None, Max_Context_Length)
 
 class QASystem(object):
     def __init__(self, encoder, decoder, embed_path, vocab, FLAGS, *args):
@@ -174,11 +213,12 @@ class QASystem(object):
             self.setup_loss()
 
         # ==== set up training/updating procedure ====
+        #self.optimizer = get_optimizer("adam", self.loss, self.max_grad_norm, self.starter_learning_rate)
+        #self.train_op = self.optimizer.minimize(self.loss)  # , global_step=global_step)
+        #learning_rate = self.starter_learning_rate
+
         global_step = tf.Variable(0, trainable=False)
         learning_rate = tf.train.exponential_decay(self.starter_learning_rate, global_step, 100000, 0.96, staircase=True)
-
-        #self.optimizer = get_optimizer("adam", self.loss, self.max_grad_norm, learning_rate)
-        #self.train_op = self.optimizer.minimize(self.loss, global_step=global_step)
         self.train_op = get_optimizer("adam", self.loss, self.max_grad_norm, learning_rate)
 
     def setup_system(self):
@@ -238,7 +278,7 @@ class QASystem(object):
                       self.p_mask_context: contextsMasks,
                       self.p_label_start: labels_s,
                       self.p_label_end: labels_e,
-                      self.p_keep_prob_dropout_placeholder: 1-self.dropout}
+                      self.p_keep_prob_dropout_placeholder: 1.0-self.dropout}
 
         output_feed = [self.train_op, self.loss]
 
@@ -273,7 +313,7 @@ class QASystem(object):
                       self.p_mask_question: [test_x["questionMask"]],
                       self.p_context: [test_x["context"]],
                       self.p_mask_context: [test_x["contextMask"]],
-                      self.p_keep_prob_dropout_placeholder: 0}
+                      self.p_keep_prob_dropout_placeholder: 1.0}
 
         output_feed = [self.pred_s, self.pred_e]
 
