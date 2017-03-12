@@ -66,6 +66,8 @@ class Encoder(object):
         questionLen = tf.reduce_sum(tf.cast(questionMask, tf.int32), axis=1)
         contextLen = tf.reduce_sum(tf.cast(contextMask, tf.int32), axis=1)
 
+        return context
+
         # Question LSTM
         with vs.variable_scope("LSTMQuestionCOntext", reuse=None):
             # Biderectional
