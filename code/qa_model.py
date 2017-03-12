@@ -69,33 +69,35 @@ class Encoder(object):
         # Question LSTM
         with vs.variable_scope("LSTMQuestionCOntext", reuse=None):
             # Biderectional
-            _, (statesQuestion_fw, statesQuestion_bw)  = tf.nn.bidirectional_dynamic_rnn(self.LSTMcell, self.LSTMcell, inputs=question,
-                                                                sequence_length=questionLen, dtype=tf.float32)
-
-            # Uniderectional
-            #_, statesQuestion = tf.nn.dynamic_rnn(cell=self.LSTMcell, inputs=question,
+            #_, (statesQuestion_fw, statesQuestion_bw)  = tf.nn.bidirectional_dynamic_rnn(self.LSTMcell, self.LSTMcell, inputs=question,
             #                                                    sequence_length=questionLen, dtype=tf.float32)
+            #
+            # Uniderectional
+            _, statesQuestion = tf.nn.dynamic_rnn(cell=self.LSTMcell, inputs=question,
+                                                                sequence_length=questionLen, dtype=tf.float32)
 
         with vs.variable_scope("LSTMQuestionCOntext", reuse=True):
             # Biderectional
             #(outputsFw, outputsBw)
-            outputs, _ = tf.nn.bidirectional_dynamic_rnn(self.LSTMcell, self.LSTMcell, inputs=context,
-                                                          sequence_length=contextLen, dtype=tf.float32,
-                                                          initial_state_fw=statesQuestion_fw,
-                                                          initial_state_bw=statesQuestion_bw)
-            questionContext = tf.concat(2, outputs)
+            #outputs, _ = tf.nn.bidirectional_dynamic_rnn(self.LSTMcell, self.LSTMcell, inputs=context,
+            #                                              sequence_length=contextLen, dtype=tf.float32,
+            #                                              initial_state_fw=statesQuestion_fw,
+            #                                              initial_state_bw=statesQuestion_bw)
+            #questionContext = tf.concat(2, outputs)
 
             # Uniderectional
-            #outputsQuestionContext, _ = tf.nn.dynamic_rnn(cell=self.LSTMcell, inputs=context,
-            #                                                                  sequence_length=contextLen, dtype=tf.float32,
-            #                                                                  initial_state=statesQuestion)
+            outputsQuestionContext, _ = tf.nn.dynamic_rnn(cell=self.LSTMcell, inputs=context,
+                                                                              sequence_length=contextLen, dtype=tf.float32,
+                                                                              initial_state=statesQuestion)
 
 
-        with vs.variable_scope("Compresser", reuse=False):
-            #(oneDimOutputs_fw, oneDimOutputs_bw)
-            oneDimOutputs, _ = tf.nn.bidirectional_dynamic_rnn(self.CompresserLSTMcell,
-                                                          self.CompresserLSTMcell, inputs=questionContext,
-                                                          sequence_length=contextLen, dtype=tf.float32)
+        return(outputsQuestionContext)
+
+        #with vs.variable_scope("Compresser", reuse=False):
+        #    #(oneDimOutputs_fw, oneDimOutputs_bw)
+        #    oneDimOutputs, _ = tf.nn.bidirectional_dynamic_rnn(self.CompresserLSTMcell,
+        #                                                  self.CompresserLSTMcell, inputs=questionContext,
+        #                                                  sequence_length=contextLen, dtype=tf.float32)
 
 
         #output = tf.reduce_sum(context, 1)
@@ -132,42 +134,51 @@ class Decoder(object):
         :return:
         """
 
-        with vs.variable_scope("Decoder", reuse=False):
-            output_s = tf.contrib.layers.fully_connected(inputs=knowledge_rep, num_outputs=self.output_size,
-                                                         weights_initializer=tf.contrib.layers.xavier_initializer())
-            output_e = tf.contrib.layers.fully_connected(inputs=knowledge_rep, num_outputs=self.output_size,
-                                                         weights_initializer=tf.contrib.layers.xavier_initializer())
-        return (output_s, output_e)
+        # Approach 1
+        #with vs.variable_scope("Decoder", reuse=False):
+        #    output_s = tf.contrib.layers.fully_connected(inputs=knowledge_rep, num_outputs=self.output_size,
+        #                                                 weights_initializer=tf.contrib.layers.xavier_initializer())
+        #    output_e = tf.contrib.layers.fully_connected(inputs=knowledge_rep, num_outputs=self.output_size,
+        #                                                 weights_initializer=tf.contrib.layers.xavier_initializer())
+        #return (output_s, output_e)
 
-        #_, max_length, encoded_size = knowledge_rep.get_shape().as_list()
 
-        #with vs.variable_scope("Decoder", reuse=None):
-        #    W_s = tf.get_variable("W_s", shape=(encoded_size, 1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
-        #    b_s = tf.get_variable("b_s", shape=(1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
 
-        #    W_e = tf.get_variable("W_e", shape=(encoded_size, 1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
-        #    b_e = tf.get_variable("b_e", shape=(1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
 
-        #summaryRep_s = []
-        #summaryRep_e = []
-        #with vs.variable_scope("Decoder", reuse=True):
-        #    for time_step in range(knowledge_rep.get_shape()[1]):
-        #        x = knowledge_rep[:, time_step, :]
 
-        #        if dropout is not None:
-        #            summaryRep_s.append(tf.matmul(tf.nn.dropout(x, dropout), W_s) + b_s)
-        #            summaryRep_e.append(tf.matmul(tf.nn.dropout(x, dropout), W_e) + b_e)
-        #        else:
-        #            summaryRep_s.append(tf.matmul(x, W_s) + b_s)
-        #            summaryRep_e.append(tf.matmul(x, W_e) + b_e)
 
-        #output_s = tf.transpose(tf.stack(summaryRep_s), perm=[1, 0, 2])
-        #output_s = tf.reshape(output_s, [-1, max_length])
 
-        #output_e = tf.transpose(tf.stack(summaryRep_e), perm=[1, 0, 2])
-        #output_e = tf.reshape(output_e, [-1, max_length])
 
-        #return (output_s, output_e) #Must be of shape (None, Max_Context_Length)
+        # Approach 2
+        _, max_length, encoded_size = knowledge_rep.get_shape().as_list()
+
+        with vs.variable_scope("Decoder", reuse=None):
+            W_s = tf.get_variable("W_s", shape=(encoded_size, 1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+            b_s = tf.get_variable("b_s", shape=(1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+
+            W_e = tf.get_variable("W_e", shape=(encoded_size, 1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+            b_e = tf.get_variable("b_e", shape=(1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+
+        summaryRep_s = []
+        summaryRep_e = []
+        with vs.variable_scope("Decoder", reuse=True):
+            for time_step in range(knowledge_rep.get_shape()[1]):
+                x = knowledge_rep[:, time_step, :]
+
+                if dropout is not None:
+                    summaryRep_s.append(tf.matmul(tf.nn.dropout(x, dropout), W_s) + b_s)
+                    summaryRep_e.append(tf.matmul(tf.nn.dropout(x, dropout), W_e) + b_e)
+                else:
+                    summaryRep_s.append(tf.matmul(x, W_s) + b_s)
+                    summaryRep_e.append(tf.matmul(x, W_e) + b_e)
+
+        output_s = tf.transpose(tf.stack(summaryRep_s), perm=[1, 0, 2])
+        output_s = tf.reshape(output_s, [-1, max_length])
+
+        output_e = tf.transpose(tf.stack(summaryRep_e), perm=[1, 0, 2])
+        output_e = tf.reshape(output_e, [-1, max_length])
+
+        return (output_s, output_e) #Must be of shape (None, Max_Context_Length)
 
 class QASystem(object):
     def __init__(self, encoder, decoder, embed_path, vocab, FLAGS, *args):
