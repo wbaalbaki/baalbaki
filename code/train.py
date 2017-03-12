@@ -20,7 +20,7 @@ tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm
 tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
 tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("epochs", 7, "Number of epochs to train.")
-tf.app.flags.DEFINE_integer("state_size", 50, "Size of each model layer.")
+tf.app.flags.DEFINE_integer("state_size", 20, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("output_size", 766, "The output size of your model.")
 tf.app.flags.DEFINE_integer("question_size", 100, "The max question size of your model.")
 tf.app.flags.DEFINE_integer("embedding_size", 100, "Size of the pretrained vocabulary.")
