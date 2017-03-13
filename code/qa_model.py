@@ -22,7 +22,7 @@ def get_optimizer(opt, loss, max_grad_norm, learning_rate=0.01):
         optfn = tf.train.GradientDescentOptimizer(learning_rate=learning_rate)
     else:
         assert (False)
-
+    return optfn
     grads_and_vars = optfn.compute_gradients(loss)
     variables = [output[1] for output in grads_and_vars]
     gradients = [output[0] for output in grads_and_vars]
@@ -228,10 +228,10 @@ class QASystem(object):
         # ==== set up training/updating procedure ====
         #self.optimizer = get_optimizer("adam", self.loss, self.max_grad_norm, self.starter_learning_rate)
         #self.train_op = self.optimizer.minimize(self.loss)  # , global_step=global_step)
-        #learning_rate = self.starter_learning_rate
+        learning_rate = self.starter_learning_rate
 
-        global_step = tf.Variable(0, trainable=False)
-        learning_rate = tf.train.exponential_decay(self.starter_learning_rate, global_step, 100000, 0.96, staircase=True)
+        #global_step = tf.Variable(0, trainable=False)
+        #learning_rate = tf.train.exponential_decay(self.starter_learning_rate, global_step, 100000, 0.96, staircase=True)
         self.train_op = get_optimizer("adam", self.loss, self.max_grad_norm, learning_rate)
 
     def setup_system(self):
