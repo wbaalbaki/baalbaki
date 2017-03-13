@@ -62,7 +62,7 @@ class Encoder(object):
         """
         question, context = inputs
         questionMask, contextMask = masks
-
+        return context
         questionLen = tf.reduce_sum(tf.cast(questionMask, tf.int32), axis=1)
         contextLen = tf.reduce_sum(tf.cast(contextMask, tf.int32), axis=1)
 
@@ -183,7 +183,7 @@ class Decoder(object):
         return (output_s, output_e) #Must be of shape (None, Max_Context_Length)
 
 class QASystem(object):
-    def __init__(self, encoder, decoder, embed_path, vocab, FLAGS, *args):
+    def __init__(self, encoder, decoder, embed_path, FLAGS, *args):
         """
         Initializes your System
 
@@ -196,9 +196,8 @@ class QASystem(object):
         self.encoder = encoder
         self.decoder = decoder
         self.embed_path = embed_path
-        self.vocab = vocab
 
-        # Load from flags (later)
+        #Load from flags (later)
         self.max_grad_norm = FLAGS.max_gradient_norm
         self.questionMaxLen = 100
         self.output_size = FLAGS.output_size
@@ -206,6 +205,7 @@ class QASystem(object):
         self.numEpochs = FLAGS.epochs
         self.dropout = FLAGS.dropout
         self.starter_learning_rate = FLAGS.learning_rate
+
 
         self.batchesToDisplay = 500
 
@@ -284,6 +284,7 @@ class QASystem(object):
 
         labels_s = [example["span"][0] for example in train_x]
         labels_e = [example["span"][1] for example in train_x]
+
 
         input_feed = {self.p_question: questions,
                       self.p_mask_question: questionMasks,
@@ -370,7 +371,7 @@ class QASystem(object):
 
         return valid_cost
 
-    def evaluate_answer(self, session, dataset, sample=100, log=False):
+    def evaluate_answer(self, session, dataset, vocab, sample=100, log=False):
         """
         Evaluate the model's performance using the harmonic mean of F1 and Exact Match (EM)
         with the set of true answer labels
@@ -397,7 +398,7 @@ class QASystem(object):
             true_a_e = int(dataset[i]["span"][1])
             predicted_a_s, predicted_a_e = self.answer(session, dataset[i])
 
-            paragraphWords = [self.vocab[j] for j in dataset[i]["context"]]
+            paragraphWords = [vocab[j] for j in dataset[i]["context"]]
             ground_truth = paragraphWords[true_a_s:true_a_e + 1]
             prediction = paragraphWords[predicted_a_s:predicted_a_e + 1]
 
@@ -457,10 +458,10 @@ class QASystem(object):
                 currExamples = [dataset[randomOrder[i]] for i in range(currBatchStart, currBatchEnd + 1)]
 
                 # Train
-                self.optimize(session, currExamples)
+                _, currLoss = self.optimize(session, currExamples)
 
                 # Display what is the current batch
-                if batches % self.batchesToDisplay == 0: logging.info("%d batches out of %d", batches, totalBatches)
+                if batches % self.batchesToDisplay == 0: logging.info("%d batches out of %d, currentLoss is %f", batches, totalBatches, currLoss)
 
                 # Get ready for next batch
                 firstExampleInBatch += self.batch_size
@@ -468,9 +469,8 @@ class QASystem(object):
 
             # Print current progress
             toc = time.time()
-            logging.info("\n\nLast epoch took: %f secs" % (toc - tic))
+            logging.info("Last epoch took: %f seconds" % (toc - tic))
 
-            self.evaluate_answer(session, dataset, sample=100, log=True)
 
             # Save model after each epoch
             #

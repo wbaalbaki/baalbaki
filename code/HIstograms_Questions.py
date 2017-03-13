@@ -7,7 +7,10 @@ questions = open('data/squad/train.question', 'rt')
 
 
 for question in questions:
-    question = question.split()[0]
+    prevQuestion = question.split()
+    question = prevQuestion[0]
+    if question=="In":
+        question = question + ' ' + prevQuestion[1]
     hist[question] += 1
 
 import operator
@@ -24,7 +27,7 @@ x = range(N)
 width = 1/1.5
 plt.bar(x, b, width, color="blue")
 
-toPlot = [x_i + 0.25 for x_i in x]
+toPlot = [x_i + 0.35 for x_i in x]
 plt.xticks(toPlot, a)
 
 plt.show()

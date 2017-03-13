@@ -7,6 +7,7 @@ import json
 from datetime import datetime
 
 import tensorflow as tf
+import sys
 
 from qa_model import Encoder, QASystem, Decoder
 from os.path import join as pjoin
@@ -79,13 +80,14 @@ def get_normalized_train_dir(train_dir):
 
     return global_train_dir
 
-def initialize_datasets(data_dir, trainTest='train'):
+def initialize_datasets(data_dir, trainTest='train', debugMode=False):
     # Open files
     questions = open(data_dir + '/' + trainTest + 'ids.question', 'rt')
     contexts = open(data_dir + '/' + trainTest + 'ids.context', 'rt')
     spans = open(data_dir + '/' + trainTest + 'span', 'rt')
 
     output = []
+    numExamples = 0
     for question in questions:
         context = contexts.next().strip()
         span = spans.next().strip()
@@ -123,6 +125,10 @@ def initialize_datasets(data_dir, trainTest='train'):
                        "contextMask": contextMask,
                        "span": span})
 
+        numExamples += 1
+        if debugMode and numExamples > 1000:
+            break
+
     # Close files
     questions.close()
     contexts.close()
@@ -131,12 +137,9 @@ def initialize_datasets(data_dir, trainTest='train'):
     return output
 
 def main(_):
-
     # Do what you need to load datasets from FLAGS.data_dir
-    datasetTrain = initialize_datasets(FLAGS.data_dir, 'train.')
-    datasetVal = initialize_datasets(FLAGS.data_dir, 'val.')
-    datasetTrain = datasetTrain[0:1000]
-
+    datasetTrain = initialize_datasets(FLAGS.data_dir, 'train.', debugMode=True)
+    datasetVal = initialize_datasets(FLAGS.data_dir, 'val.', debugMode=True)
 
     embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
     vocab_path = FLAGS.vocab_path or pjoin(FLAGS.data_dir, "vocab.dat")
@@ -145,7 +148,10 @@ def main(_):
     encoder = Encoder(size=FLAGS.state_size, vocab_dim=FLAGS.embedding_size)
     decoder = Decoder(output_size=FLAGS.output_size)
 
-    qa = QASystem(encoder, decoder, embed_path, rev_vocab, FLAGS)
+    #This is taking a long time
+    tic = datetime.now()
+    qa = QASystem(encoder, decoder, embed_path, FLAGS)
+    print(datetime.now() - tic)
 
     if not os.path.exists(FLAGS.log_dir):
         os.makedirs(FLAGS.log_dir)
@@ -155,7 +161,6 @@ def main(_):
     print(vars(FLAGS))
     with open(os.path.join(FLAGS.log_dir, "flags.json"), 'w') as fout:
         json.dump(FLAGS.__flags, fout)
-
 
     saver = tf.train.Saver()
 
@@ -172,7 +177,7 @@ def main(_):
 
         qa.train(sess, datasetTrain, save_train_dir, saver)
 
-        qa.evaluate_answer(sess, datasetVal, sample=100, log=True)
+        qa.evaluate_answer(sess, datasetVal, rev_vocab, sample=100, log=True)
 
 if __name__ == "__main__":
     tf.app.run()
