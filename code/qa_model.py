@@ -66,37 +66,37 @@ class Encoder(object):
         questionLen = tf.reduce_sum(tf.cast(questionMask, tf.int32), axis=1)
         contextLen = tf.reduce_sum(tf.cast(contextMask, tf.int32), axis=1)
 
-        return context
-
         # Question LSTM
         with vs.variable_scope("LSTMQuestionCOntext", reuse=None):
             # Biderectional
-            #_, (statesQuestion_fw, statesQuestion_bw)  = tf.nn.bidirectional_dynamic_rnn(self.LSTMcell, self.LSTMcell, inputs=question,
-            #                                                    sequence_length=questionLen, dtype=tf.float32)
-            #
-            # Uniderectional
-            _, statesQuestion = tf.nn.dynamic_rnn(cell=self.LSTMcell, inputs=question,
+            _, (statesQuestion_fw, statesQuestion_bw)  = tf.nn.bidirectional_dynamic_rnn(self.LSTMcell, self.LSTMcell, inputs=question,
                                                                 sequence_length=questionLen, dtype=tf.float32)
+
+            # Uniderectional
+            #_, statesQuestion = tf.nn.dynamic_rnn(cell=self.LSTMcell, inputs=question,
+            #                                                    sequence_length=questionLen, dtype=tf.float32)
 
         with vs.variable_scope("LSTMQuestionCOntext", reuse=True):
             # Biderectional
             #(outputsFw, outputsBw)
-            #outputs, _ = tf.nn.bidirectional_dynamic_rnn(self.LSTMcell, self.LSTMcell, inputs=context,
-            #                                              sequence_length=contextLen, dtype=tf.float32,
-            #                                              initial_state_fw=statesQuestion_fw,
-            #                                              initial_state_bw=statesQuestion_bw)
-            #questionContext = tf.concat(2, outputs)
+            outputs, _ = tf.nn.bidirectional_dynamic_rnn(self.LSTMcell, self.LSTMcell, inputs=context,
+                                                          sequence_length=contextLen, dtype=tf.float32,
+                                                          initial_state_fw=statesQuestion_fw,
+                                                          initial_state_bw=statesQuestion_bw)
+            questionContext = tf.concat(2, outputs)
+
+        return questionContext
 
             # Uniderectional
-            outputsQuestionContext, _ = tf.nn.dynamic_rnn(cell=self.LSTMcell, inputs=context,
-                                                                              sequence_length=contextLen, dtype=tf.float32,
-                                                                              initial_state=statesQuestion)
+            #outputsQuestionContext, _ = tf.nn.dynamic_rnn(cell=self.LSTMcell, inputs=context,
+            #                                                                  sequence_length=contextLen, dtype=tf.float32,
+            #                                                                  initial_state=statesQuestion)
 
 
-        return(outputsQuestionContext)
+        #return(outputsQuestionContext)
 
         #with vs.variable_scope("Compresser", reuse=False):
-        #    #(oneDimOutputs_fw, oneDimOutputs_bw)
+            #(oneDimOutputs_fw, oneDimOutputs_bw)
         #    oneDimOutputs, _ = tf.nn.bidirectional_dynamic_rnn(self.CompresserLSTMcell,
         #                                                  self.CompresserLSTMcell, inputs=questionContext,
         #                                                  sequence_length=contextLen, dtype=tf.float32)
@@ -416,7 +416,7 @@ class QASystem(object):
 
         return f1, em
 
-    def train(self, session, dataset, train_dir):
+    def train(self, session, dataset, train_dir, saver):
         """
         Implement main training loop
 
@@ -473,7 +473,7 @@ class QASystem(object):
             self.evaluate_answer(session, dataset, sample=100, log=True)
 
             # Save model after each epoch
-            saver = tf.train.Saver()
+            #
             saver.save(session, train_dir)
 
         # some free code to print out number of parameters in your model

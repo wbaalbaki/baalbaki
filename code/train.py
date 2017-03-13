@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import os
 import json
+from datetime import datetime
 
 import tensorflow as tf
 
@@ -18,9 +19,9 @@ logging.basicConfig(level=logging.INFO)
 tf.app.flags.DEFINE_float("learning_rate", 0.1, "Learning rate.")
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
-tf.app.flags.DEFINE_integer("batch_size", 1, "Batch size to use during training.")
-tf.app.flags.DEFINE_integer("epochs", 10, "Number of epochs to train.")
-tf.app.flags.DEFINE_integer("state_size", 4, "Size of each model layer.")
+tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
+tf.app.flags.DEFINE_integer("epochs", 5, "Number of epochs to train.")
+tf.app.flags.DEFINE_integer("state_size", 2, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("output_size", 766, "The output size of your model.")
 tf.app.flags.DEFINE_integer("question_size", 100, "The max question size of your model.")
 tf.app.flags.DEFINE_integer("embedding_size", 100, "Size of the pretrained vocabulary.")
@@ -75,6 +76,7 @@ def get_normalized_train_dir(train_dir):
     if not os.path.exists(train_dir):
         os.makedirs(train_dir)
     os.symlink(os.path.abspath(train_dir), global_train_dir)
+
     return global_train_dir
 
 def initialize_datasets(data_dir, trainTest='train'):
@@ -133,7 +135,7 @@ def main(_):
     # Do what you need to load datasets from FLAGS.data_dir
     datasetTrain = initialize_datasets(FLAGS.data_dir, 'train')
     datasetVal = initialize_datasets(FLAGS.data_dir, 'val')
-    #datasetTrain = datasetTrain[0:100]
+    datasetTrain = datasetTrain[0:1000]
 
 
     embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
@@ -154,12 +156,23 @@ def main(_):
     with open(os.path.join(FLAGS.log_dir, "flags.json"), 'w') as fout:
         json.dump(FLAGS.__flags, fout)
 
+    saver = tf.train.Saver()
+
+
     with tf.Session() as sess:
         load_train_dir = get_normalized_train_dir(FLAGS.load_train_dir or FLAGS.train_dir)
         initialize_model(sess, qa, load_train_dir)
 
-        save_train_dir = get_normalized_train_dir(FLAGS.train_dir)
-        qa.train(sess, datasetTrain, save_train_dir)
+        # Get directory to save model
+        #save_train_dir = get_normalized_train_dir(FLAGS.train_dir)
+        results_path = "results/{:%Y%m%d_%H%M%S}/".format(datetime.now())
+        save_train_dir = results_path + "model.weights/"
+        if not os.path.exists(save_train_dir):
+            os.makedirs(save_train_dir)
+
+
+
+        qa.train(sess, datasetTrain, save_train_dir, saver)
 
         qa.evaluate_answer(sess, datasetVal, sample=100, log=True)
 
