@@ -81,9 +81,9 @@ def get_normalized_train_dir(train_dir):
 
 def initialize_datasets(data_dir, trainTest='train'):
     # Open files
-    questions = open(data_dir + '/' + trainTest + '.ids.question', 'rt')
-    contexts = open(data_dir + '/' + trainTest + '.ids.context', 'rt')
-    spans = open(data_dir + '/' + trainTest + '.span', 'rt')
+    questions = open(data_dir + '/' + trainTest + 'ids.question', 'rt')
+    contexts = open(data_dir + '/' + trainTest + 'ids.context', 'rt')
+    spans = open(data_dir + '/' + trainTest + 'span', 'rt')
 
     output = []
     for question in questions:
@@ -133,8 +133,8 @@ def initialize_datasets(data_dir, trainTest='train'):
 def main(_):
 
     # Do what you need to load datasets from FLAGS.data_dir
-    datasetTrain = initialize_datasets(FLAGS.data_dir, 'train')
-    datasetVal = initialize_datasets(FLAGS.data_dir, 'val')
+    datasetTrain = initialize_datasets(FLAGS.data_dir, 'train.')
+    datasetVal = initialize_datasets(FLAGS.data_dir, 'val.')
     datasetTrain = datasetTrain[0:1000]
 
 
@@ -156,8 +156,8 @@ def main(_):
     with open(os.path.join(FLAGS.log_dir, "flags.json"), 'w') as fout:
         json.dump(FLAGS.__flags, fout)
 
-    saver = tf.train.Saver()
 
+    saver = tf.train.Saver()
 
     with tf.Session() as sess:
         load_train_dir = get_normalized_train_dir(FLAGS.load_train_dir or FLAGS.train_dir)
@@ -169,8 +169,6 @@ def main(_):
         save_train_dir = results_path + "model.weights/"
         if not os.path.exists(save_train_dir):
             os.makedirs(save_train_dir)
-
-
 
         qa.train(sess, datasetTrain, save_train_dir, saver)
 

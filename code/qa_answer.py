@@ -18,6 +18,7 @@ from qa_model import Encoder, QASystem, Decoder
 from preprocessing.squad_preprocess import data_from_json, maybe_download, squad_base_url, \
     invert_map, tokenize, token_idx_map
 import qa_data
+from qa_data import PAD_ID
 
 import logging
 
@@ -110,7 +111,7 @@ def prepare_dev(prefix, dev_filename, vocab):
     return context_data, question_data, question_uuid_data
 
 
-def generate_answers(sess, model, dataset, rev_vocab):
+def generate_answers(sess, model, dataset, rev_vocab=None):
     """
     Loop over the dev or test dataset and generate answer.
 
@@ -130,6 +131,19 @@ def generate_answers(sess, model, dataset, rev_vocab):
     :return:
     """
     answers = {}
+
+    for example in dataset:
+        uuid = example["uuid"]
+
+        predicted_a_s, predicted_a_e = model.answer(sess, example)
+
+        paragraphWords = [model.vocab[j] for j in example["context"]]
+        prediction = paragraphWords[predicted_a_s:predicted_a_e + 1]
+
+        # Turn into a sentence
+        prediction = ' '.join(prediction)
+
+        answers[uuid] = prediction
 
     return answers
 
@@ -171,20 +185,47 @@ def main(_):
     dev_dirname = os.path.dirname(os.path.abspath(FLAGS.dev_path))
     dev_filename = os.path.basename(FLAGS.dev_path)
     context_data, question_data, question_uuid_data = prepare_dev(dev_dirname, dev_filename, vocab)
-    dataset = (context_data, question_data, question_uuid_data)
+    #dataset = (context_data, question_data, question_uuid_data)
 
     # ========= Model-specific =========
     # You must change the following code to adjust to your model
+    dataset = []
+    for i in range(len(context_data)):
+        question = question_data[i]
+        questionLen = len(question)
+        # Pad question
+        if questionLen > FLAGS.question_size:
+            question = question[:FLAGS.question_size]
+            questionMask = [True] * FLAGS.question_size
+        else:
+            question = question + [PAD_ID] * (FLAGS.question_size - questionLen)
+            questionMask = [True] * questionLen + [False] * (FLAGS.question_size - questionLen)
+
+        context = context_data[i]
+        contextLen = len(context)
+        # Pad context
+        if contextLen > FLAGS.output_size:
+            context = context[:FLAGS.output_size]
+            contextMask = [True] * FLAGS.output_size
+        else:
+            context = context + [PAD_ID] * (FLAGS.output_size - contextLen)
+            contextMask = [True] * contextLen + [False] * (FLAGS.output_size - contextLen)
+
+        dataset.append({"question": question,
+                        "questionMask": questionMask,
+                        "context": context,
+                        "contextMask": contextMask,
+                        "uuid": question_uuid_data[i]})
 
     encoder = Encoder(size=FLAGS.state_size, vocab_dim=FLAGS.embedding_size)
     decoder = Decoder(output_size=FLAGS.output_size)
 
-    qa = QASystem(encoder, decoder)
+    qa = QASystem(encoder, decoder, embed_path, rev_vocab, FLAGS)
 
     with tf.Session() as sess:
         train_dir = get_normalized_train_dir(FLAGS.train_dir)
         initialize_model(sess, qa, train_dir)
-        answers = generate_answers(sess, qa, dataset, rev_vocab)
+        answers = generate_answers(sess, qa, dataset)#, rev_vocab)
 
         # write to json file to root dir
         with io.open('dev-prediction.json', 'w', encoding='utf-8') as f:
