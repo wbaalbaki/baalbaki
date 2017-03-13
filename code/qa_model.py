@@ -62,7 +62,7 @@ class Encoder(object):
         """
         question, context = inputs
         questionMask, contextMask = masks
-        return context
+
         questionLen = tf.reduce_sum(tf.cast(questionMask, tf.int32), axis=1)
         contextLen = tf.reduce_sum(tf.cast(contextMask, tf.int32), axis=1)
 
@@ -458,9 +458,7 @@ class QASystem(object):
                 currExamples = [dataset[randomOrder[i]] for i in range(currBatchStart, currBatchEnd + 1)]
 
                 # Train
-                ticc = time.time()
                 _, currLoss = self.optimize(session, currExamples)
-                print(time.time() - ticc)
 
                 # Display what is the current batch
                 if batches % self.batchesToDisplay == 0: logging.info("%d batches out of %d, currentLoss is %f", batches, totalBatches, currLoss)
