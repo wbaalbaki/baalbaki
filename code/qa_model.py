@@ -226,13 +226,13 @@ class QASystem(object):
             self.setup_loss()
 
         # ==== set up training/updating procedure ====
-        #self.optimizer = get_optimizer("adam", self.loss, self.max_grad_norm, self.starter_learning_rate)
-        #self.train_op = self.optimizer.minimize(self.loss)  # , global_step=global_step)
-        learning_rate = self.starter_learning_rate
+        self.optimizer = get_optimizer("adam", self.loss, self.max_grad_norm, self.starter_learning_rate)
+        self.train_op = self.optimizer.minimize(self.loss)  # , global_step=global_step)
+        #learning_rate = self.starter_learning_rate
 
         #global_step = tf.Variable(0, trainable=False)
         #learning_rate = tf.train.exponential_decay(self.starter_learning_rate, global_step, 100000, 0.96, staircase=True)
-        self.train_op = get_optimizer("adam", self.loss, self.max_grad_norm, learning_rate)
+        #self.train_op = get_optimizer("adam", self.loss, self.max_grad_norm, learning_rate)
 
     def setup_system(self):
         """
