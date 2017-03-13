@@ -460,7 +460,7 @@ class QASystem(object):
                 # Train
                 ticc = time.time()
                 _, currLoss = self.optimize(session, currExamples)
-                print time.time() - ticc
+                print(time.time() - ticc)
 
                 # Display what is the current batch
                 if batches % self.batchesToDisplay == 0: logging.info("%d batches out of %d, currentLoss is %f", batches, totalBatches, currLoss)
