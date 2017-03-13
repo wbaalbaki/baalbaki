@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 tf.app.flags.DEFINE_float("learning_rate", 0.1, "Learning rate.")
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
-tf.app.flags.DEFINE_integer("batch_size", 200, "Batch size to use during training.")
+tf.app.flags.DEFINE_integer("batch_size", 1000, "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("epochs", 5, "Number of epochs to train.")
 tf.app.flags.DEFINE_integer("state_size", 2, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("output_size", 766, "The output size of your model.")
@@ -126,7 +126,7 @@ def initialize_datasets(data_dir, trainTest='train', debugMode=False):
                        "span": span})
 
         numExamples += 1
-        if debugMode and numExamples > 1000:
+        if debugMode and numExamples > 5000:
             break
 
     # Close files
