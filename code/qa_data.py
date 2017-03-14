@@ -27,6 +27,7 @@ UNK_ID = 2
 def setup_args():
     parser = argparse.ArgumentParser()
     home = os.path.join(os.path.dirname(os.path.realpath(__file__)))
+    home = "/home/baalbaki/baalbaki"
     vocab_dir = os.path.join(home, "data", "squad")
     glove_dir = os.path.join(home, "data", "dwr")
     source_dir = os.path.join(home, "data", "squad")
@@ -144,7 +145,7 @@ def data_to_token_ids(data_path, target_path, vocabulary_path,
 if __name__ == '__main__':
     args = setup_args()
     vocab_path = pjoin(args.vocab_dir, "vocab.dat")
-    vocab_path = "/home/baalbaki/baalbaki/data/squad/vocab.dat"
+    #vocab_path = "/home/baalbaki/baalbaki/data/squad/vocab.dat"
 
     train_path = pjoin(args.source_dir, "train")
     valid_path = pjoin(args.source_dir, "val")
