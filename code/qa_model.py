@@ -65,7 +65,6 @@ class Encoder(object):
 
         #questionLen = tf.reduce_sum(tf.cast(questionMask, tf.int32), axis=1)
         #contextLen = tf.reduce_sum(tf.cast(contextMask, tf.int32), axis=1)
-        return context
         # Question LSTM
         with vs.variable_scope("LSTMQuestionCOntext", reuse=None):
             # Biderectional
@@ -207,9 +206,6 @@ class QASystem(object):
         self.starter_learning_rate = FLAGS.learning_rate
 
 
-        self.batchesToDisplay = 500
-
-
         # ==== set up placeholder tokens ========
         self.p_question = tf.placeholder(shape=(None, self.questionMaxLen), name="Question", dtype=tf.int32)
         #self.p_mask_question = tf.placeholder(shape=(None, self.questionMaxLen), name="MaskQuestion", dtype=tf.bool)
@@ -220,6 +216,7 @@ class QASystem(object):
         self.p_label_start = tf.placeholder(shape=(None), name="LabelEnd", dtype=tf.int32)
         self.p_label_end = tf.placeholder(shape=(None), name="LabelEnd", dtype=tf.int32)
         self.p_keep_prob_dropout_placeholder = tf.placeholder(shape=(), name="Dropout", dtype=tf.float32)
+
 
         # ==== assemble pieces ====
         with tf.variable_scope("qa", initializer=tf.uniform_unit_scaling_initializer(1.0)):
@@ -345,8 +342,8 @@ class QASystem(object):
 
 
         # Masking answer
-        yp = [yp[i] for i in range(len(yp)) if test_x["contextMask"]]
-        yp2 = [yp2[i] for i in range(len(yp2)) if test_x["contextMask"]]
+        yp = yp[0:test_x["contextMask"]]#"[yp[i] for i in range(len(yp)) if test_x["contextMask"]]
+        yp2 = yp2[0:test_x["contextMask"]]#[yp2[i] for i in range(len(yp2)) if test_x["contextMask"]]
 
         a_s = np.argmax(yp)#, axis=1)
         a_e = np.argmax(yp2)#, axis=1)
@@ -444,8 +441,10 @@ class QASystem(object):
         """
         numExamples = len(dataset)
         totalBatches = numExamples/self.batch_size
+        batchesToDisplay = int(totalBatches/5)
 
         saver = tf.train.Saver()
+        maxLoss = 100000000
         #Loop through epochs
         for epoch in range(self.numEpochs):
             tic = time.time()
@@ -464,7 +463,7 @@ class QASystem(object):
                 _, currLoss = self.optimize(session, currExamples)
 
                 # Display what is the current batch
-                if batches % self.batchesToDisplay == 0: logging.info("%d batches out of %d, currentLoss is %f", batches, totalBatches, currLoss)
+                if batches % batchesToDisplay == 0: logging.info("%d batches out of %d, currentLoss is %f", batches, totalBatches, currLoss)
 
                 # Get ready for next batch
                 firstExampleInBatch += self.batch_size
@@ -476,7 +475,10 @@ class QASystem(object):
 
 
             # Save model after each epoch
-            saver.save(session, train_dir)
+            if currLoss <= maxLoss:
+                logging.info("Achieved best loss so far, saving the model")
+                saver.save(session, train_dir+'my-model')
+            #saver.save(session, train_dir)
 
         # some free code to print out number of parameters in your model
         # it's always good to check!
