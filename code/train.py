@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 tf.app.flags.DEFINE_float("learning_rate", 0.1, "Learning rate.")
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
-tf.app.flags.DEFINE_integer("batch_size", 2000, "Batch size to use during training.")
+tf.app.flags.DEFINE_integer("batch_size", 100, "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("epochs", 5, "Number of epochs to train.")
 tf.app.flags.DEFINE_integer("state_size", 2, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("output_size", 766, "The output size of your model.")
@@ -99,10 +99,10 @@ def initialize_datasets(data_dir, trainTest='train', debugMode=False):
         # Pad question
         if questionLen > FLAGS.question_size:
             question = question[:FLAGS.question_size]
-            questionMask = [True] * FLAGS.question_size
+            #questionMask = [True] * FLAGS.question_size
         else:
             question = question + [PAD_ID] * (FLAGS.question_size - questionLen)
-            questionMask = [True] * questionLen + [False] *  (FLAGS.question_size - questionLen)
+            #questionMask = [True] * questionLen + [False] *  (FLAGS.question_size - questionLen)
 
         # Get context
         context = [int(wordId) for wordId in context.split()]
@@ -111,22 +111,22 @@ def initialize_datasets(data_dir, trainTest='train', debugMode=False):
         # Pad context
         if contextLen > FLAGS.output_size:
             context = context[:FLAGS.output_size]
-            contextMask = [True] * FLAGS.output_size
+            #contextMask = [True] * FLAGS.output_size
         else:
             context = context + [PAD_ID] * (FLAGS.output_size - contextLen)
-            contextMask = [True] * contextLen + [False] *  (FLAGS.output_size - contextLen)
+            #contextMask = [True] * contextLen + [False] *  (FLAGS.output_size - contextLen)
 
         # Span
         span = [int(spanIdx) for spanIdx in span.split()]
 
         output.append({"question": question,
-                       "questionMask": questionMask,
+                       "questionMask": questionLen,#questionMask,
                        "context": context,
-                       "contextMask": contextMask,
+                       "contextMask": contextLen,#contextMask,
                        "span": span})
 
         numExamples += 1
-        if debugMode and numExamples > 8000:
+        if debugMode and numExamples > 500:
             break
 
     # Close files
@@ -162,7 +162,7 @@ def main(_):
     with open(os.path.join(FLAGS.log_dir, "flags.json"), 'w') as fout:
         json.dump(FLAGS.__flags, fout)
 
-    saver = tf.train.Saver()
+    #saver = tf.train.Saver()
 
     with tf.Session() as sess:
         load_train_dir = get_normalized_train_dir(FLAGS.load_train_dir or FLAGS.train_dir)
@@ -175,7 +175,7 @@ def main(_):
         if not os.path.exists(save_train_dir):
             os.makedirs(save_train_dir)
 
-        qa.train(sess, datasetTrain, save_train_dir, saver)
+        qa.train(sess, datasetTrain, save_train_dir)#, saver)
 
         qa.evaluate_answer(sess, datasetVal, rev_vocab, sample=100, log=True)
 

@@ -61,11 +61,11 @@ class Encoder(object):
                  or both.
         """
         question, context = inputs
-        questionMask, contextMask = masks
+        questionLen, contextLen = masks
 
-        questionLen = tf.reduce_sum(tf.cast(questionMask, tf.int32), axis=1)
-        contextLen = tf.reduce_sum(tf.cast(contextMask, tf.int32), axis=1)
-
+        #questionLen = tf.reduce_sum(tf.cast(questionMask, tf.int32), axis=1)
+        #contextLen = tf.reduce_sum(tf.cast(contextMask, tf.int32), axis=1)
+        return context
         # Question LSTM
         with vs.variable_scope("LSTMQuestionCOntext", reuse=None):
             # Biderectional
@@ -212,9 +212,11 @@ class QASystem(object):
 
         # ==== set up placeholder tokens ========
         self.p_question = tf.placeholder(shape=(None, self.questionMaxLen), name="Question", dtype=tf.int32)
-        self.p_mask_question = tf.placeholder(shape=(None, self.questionMaxLen), name="MaskQuestion", dtype=tf.bool)
+        #self.p_mask_question = tf.placeholder(shape=(None, self.questionMaxLen), name="MaskQuestion", dtype=tf.bool)
+        self.p_mask_question = tf.placeholder(shape=(None), name="MaskQuestion", dtype=tf.int32)
         self.p_context = tf.placeholder(shape=(None, self.output_size), name="Context", dtype=tf.int32)
-        self.p_mask_context = tf.placeholder(shape=(None, self.output_size), name="MaskContext", dtype=tf.bool)
+        #self.p_mask_context = tf.placeholder(shape=(None, self.output_size), name="MaskContext", dtype=tf.bool)
+        self.p_mask_context = tf.placeholder(shape=(None), name="MaskContext", dtype=tf.int32)
         self.p_label_start = tf.placeholder(shape=(None), name="LabelEnd", dtype=tf.int32)
         self.p_label_end = tf.placeholder(shape=(None), name="LabelEnd", dtype=tf.int32)
         self.p_keep_prob_dropout_placeholder = tf.placeholder(shape=(), name="Dropout", dtype=tf.float32)
@@ -417,7 +419,7 @@ class QASystem(object):
 
         return f1, em
 
-    def train(self, session, dataset, train_dir, saver):
+    def train(self, session, dataset, train_dir):#, saver):
         """
         Implement main training loop
 
@@ -443,6 +445,7 @@ class QASystem(object):
         numExamples = len(dataset)
         totalBatches = numExamples/self.batch_size
 
+        saver = tf.train.Saver()
         #Loop through epochs
         for epoch in range(self.numEpochs):
             tic = time.time()
@@ -473,7 +476,6 @@ class QASystem(object):
 
 
             # Save model after each epoch
-            #
             saver.save(session, train_dir)
 
         # some free code to print out number of parameters in your model
