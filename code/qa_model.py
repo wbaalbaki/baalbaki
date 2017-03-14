@@ -66,7 +66,7 @@ class Encoder(object):
         #questionLen = tf.reduce_sum(tf.cast(questionMask, tf.int32), axis=1)
         #contextLen = tf.reduce_sum(tf.cast(contextMask, tf.int32), axis=1)
         # Question LSTM
-        with vs.variable_scope("LSTMQuestionCOntext", reuse=None):
+        with vs.variable_scope("LSTMQuestionContext", reuse=None):
             # Biderectional
             _, (statesQuestion_fw, statesQuestion_bw)  = tf.nn.bidirectional_dynamic_rnn(self.LSTMcell, self.LSTMcell, inputs=question,
                                                                 sequence_length=questionLen, dtype=tf.float32)
@@ -75,7 +75,7 @@ class Encoder(object):
             #_, statesQuestion = tf.nn.dynamic_rnn(cell=self.LSTMcell, inputs=question,
             #                                                    sequence_length=questionLen, dtype=tf.float32)
 
-        with vs.variable_scope("LSTMQuestionCOntext", reuse=True):
+        with vs.variable_scope("LSTMQuestionContext", reuse=True):
             # Biderectional
             #(outputsFw, outputsBw)
             outputs, _ = tf.nn.bidirectional_dynamic_rnn(self.LSTMcell, self.LSTMcell, inputs=context,
@@ -84,21 +84,19 @@ class Encoder(object):
                                                           initial_state_bw=statesQuestion_bw)
             questionContext = tf.concat(2, outputs)
 
-        return questionContext
-
             # Uniderectional
-            #outputsQuestionContext, _ = tf.nn.dynamic_rnn(cell=self.LSTMcell, inputs=context,
+            #questionContext, _ = tf.nn.dynamic_rnn(cell=self.LSTMcell, inputs=context,
             #                                                                  sequence_length=contextLen, dtype=tf.float32,
             #                                                                  initial_state=statesQuestion)
 
 
-        #return(outputsQuestionContext)
+        return(questionContext)
 
-        #with vs.variable_scope("Compresser", reuse=False):
+        with vs.variable_scope("Compresser", reuse=False):
             #(oneDimOutputs_fw, oneDimOutputs_bw)
-        #    oneDimOutputs, _ = tf.nn.bidirectional_dynamic_rnn(self.CompresserLSTMcell,
-        #                                                  self.CompresserLSTMcell, inputs=questionContext,
-        #                                                  sequence_length=contextLen, dtype=tf.float32)
+            oneDimOutputs, _ = tf.nn.bidirectional_dynamic_rnn(self.CompresserLSTMcell,
+                                                          self.CompresserLSTMcell, inputs=questionContext,
+                                                          sequence_length=contextLen, dtype=tf.float32)
 
 
         #output = tf.reduce_sum(context, 1)
@@ -232,6 +230,7 @@ class QASystem(object):
         global_step = tf.Variable(0, trainable=False)
         learning_rate = tf.train.exponential_decay(self.starter_learning_rate, global_step, 100000, 0.96, staircase=True)
         self.train_op = get_optimizer("adam", self.loss, self.max_grad_norm, learning_rate)
+        self.saver = tf.train.Saver()
 
     def setup_system(self):
         """
@@ -443,8 +442,8 @@ class QASystem(object):
         totalBatches = numExamples/self.batch_size
         batchesToDisplay = int(totalBatches/5)
 
-        saver = tf.train.Saver()
-        maxLoss = 100000000
+        minLoss = 100000000
+
         #Loop through epochs
         for epoch in range(self.numEpochs):
             tic = time.time()
@@ -475,9 +474,10 @@ class QASystem(object):
 
 
             # Save model after each epoch
-            if currLoss <= maxLoss:
+            if currLoss <= minLoss:
+                minLoss = currLoss
                 logging.info("Achieved best loss so far, saving the model")
-                saver.save(session, train_dir+'my-model')
+                self.saver.save(session, train_dir+'my-model')
             #saver.save(session, train_dir)
 
         # some free code to print out number of parameters in your model

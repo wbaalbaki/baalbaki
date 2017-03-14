@@ -27,12 +27,14 @@ logging.basicConfig(level=logging.INFO)
 FLAGS = tf.app.flags.FLAGS
 
 tf.app.flags.DEFINE_float("learning_rate", 0.1, "Learning rate.")
+tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
 tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("epochs", 0, "Number of epochs to train.")
 tf.app.flags.DEFINE_integer("state_size", 2, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("embedding_size", 50, "Size of the pretrained vocabulary.")
 tf.app.flags.DEFINE_integer("output_size", 766, "The output size of your model.")
+tf.app.flags.DEFINE_integer("question_size", 100, "The max question size of your model.")
 tf.app.flags.DEFINE_integer("keep", 0, "How many checkpoints to keep, 0 indicates keep all.")
 tf.app.flags.DEFINE_string("train_dir", "train", "Training directory (default: ./train).")
 tf.app.flags.DEFINE_string("log_dir", "log", "Path to store log and flag files (default: ./log)")
@@ -74,10 +76,13 @@ def read_dataset(dataset, tier, vocab):
     query_data = []
     question_uuid_data = []
 
+
     for articles_id in tqdm(range(len(dataset['data'])), desc="Preprocessing {}".format(tier)):
         article_paragraphs = dataset['data'][articles_id]['paragraphs']
+
         for pid in range(len(article_paragraphs)):
             context = article_paragraphs[pid]['context']
+
             # The following replacements are suggested in the paper
             # BidAF (Seo et al., 2016)
             context = context.replace("''", '" ')
@@ -104,7 +109,6 @@ def read_dataset(dataset, tier, vocab):
 def prepare_dev(prefix, dev_filename, vocab):
     # Don't check file size, since we could be using other datasets
     dev_dataset = maybe_download(squad_base_url, dev_filename, prefix)
-
     dev_data = data_from_json(os.path.join(prefix, dev_filename))
     context_data, question_data, question_uuid_data = read_dataset(dev_data, 'dev', vocab)
 
@@ -131,17 +135,13 @@ def generate_answers(sess, model, dataset, rev_vocab=None):
     :return:
     """
     answers = {}
-    i = 0
     for example in dataset:
-        i += 1
-        if i > 10:
-            print(answers)
-            exit()
+
         uuid = example["uuid"]
 
         predicted_a_s, predicted_a_e = model.answer(sess, example)
 
-        paragraphWords = [model.vocab[j] for j in example["context"]]
+        paragraphWords = [rev_vocab[j] for j in example["context"]]
         prediction = paragraphWords[predicted_a_s:predicted_a_e + 1]
 
         # Turn into a sentence
@@ -195,41 +195,46 @@ def main(_):
     # You must change the following code to adjust to your model
     dataset = []
     for i in range(len(context_data)):
-        question = question_data[i]
+        question = question_data[i].split()
         questionLen = len(question)
+        question = [int(question[j]) for j in range(questionLen)]
+
         # Pad question
         if questionLen > FLAGS.question_size:
             question = question[:FLAGS.question_size]
-            questionMask = [True] * FLAGS.question_size
+            #questionMask = [True] * FLAGS.question_size
         else:
             question = question + [PAD_ID] * (FLAGS.question_size - questionLen)
-            questionMask = [True] * questionLen + [False] * (FLAGS.question_size - questionLen)
+            #questionMask = [True] * questionLen + [False] * (FLAGS.question_size - questionLen)
 
-        context = context_data[i]
+        context = context_data[i].split()
+
         contextLen = len(context)
+        context = [int(context[j]) for j in range(contextLen)]
+
         # Pad context
         if contextLen > FLAGS.output_size:
             context = context[:FLAGS.output_size]
-            contextMask = [True] * FLAGS.output_size
+            #contextMask = [True] * FLAGS.output_size
         else:
             context = context + [PAD_ID] * (FLAGS.output_size - contextLen)
-            contextMask = [True] * contextLen + [False] * (FLAGS.output_size - contextLen)
+            #contextMask = [True] * contextLen + [False] * (FLAGS.output_size - contextLen)
 
         dataset.append({"question": question,
-                        "questionMask": questionMask,
+                        "questionMask": questionLen,#questionMask,
                         "context": context,
-                        "contextMask": contextMask,
+                        "contextMask": contextLen,#contextMask,
                         "uuid": question_uuid_data[i]})
 
     encoder = Encoder(size=FLAGS.state_size, vocab_dim=FLAGS.embedding_size)
     decoder = Decoder(output_size=FLAGS.output_size)
 
-    qa = QASystem(encoder, decoder, embed_path, rev_vocab, FLAGS)
+    qa = QASystem(encoder, decoder, embed_path, FLAGS)
 
     with tf.Session() as sess:
         train_dir = get_normalized_train_dir(FLAGS.train_dir)
         initialize_model(sess, qa, train_dir)
-        answers = generate_answers(sess, qa, dataset)#, rev_vocab)
+        answers = generate_answers(sess, qa, dataset, rev_vocab)
 
         # write to json file to root dir
         with io.open('dev-prediction.json', 'w', encoding='utf-8') as f:
