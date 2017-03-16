@@ -135,6 +135,7 @@ def generate_answers(sess, model, dataset, rev_vocab=None):
     :return:
     """
     answers = {}
+
     for example in dataset:
 
         uuid = example["uuid"]
