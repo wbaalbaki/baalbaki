@@ -17,12 +17,12 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
-tf.app.flags.DEFINE_float("learning_rate", 0.1, "Learning rate.")
+tf.app.flags.DEFINE_float("learning_rate", 0.001, "Learning rate.")
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
-tf.app.flags.DEFINE_integer("batch_size", 20, "Batch size to use during training.")
-tf.app.flags.DEFINE_integer("epochs", 5, "Number of epochs to train.")
-tf.app.flags.DEFINE_integer("state_size", 20, "Size of each model layer.")
+tf.app.flags.DEFINE_integer("batch_size", 100, "Batch size to use during training.")
+tf.app.flags.DEFINE_integer("epochs", 15, "Number of epochs to train.")
+tf.app.flags.DEFINE_integer("state_size", 50, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("output_size", 766, "The output size of your model.")
 tf.app.flags.DEFINE_integer("question_size", 100, "The max question size of your model.")
 tf.app.flags.DEFINE_integer("embedding_size", 50, "Size of the pretrained vocabulary.")
@@ -126,7 +126,7 @@ def initialize_datasets(data_dir, trainTest='train', debugMode=False):
                        "span": span})
 
         numExamples += 1
-        if debugMode and numExamples > 1000:
+        if debugMode and numExamples > 100:
             break
 
     # Close files
@@ -150,7 +150,7 @@ def main(_):
 
     #This is taking a long time
     tic = datetime.now()
-    qa = QASystem(encoder, decoder, embed_path, FLAGS)
+    qa = QASystem(encoder, decoder, embed_path, FLAGS, rev_vocab)
     print('Time to setup the model: ', datetime.now() - tic)
 
     if not os.path.exists(FLAGS.log_dir):
@@ -177,7 +177,7 @@ def main(_):
 
         qa.train(sess, datasetTrain, save_train_dir)#, saver)
 
-        qa.evaluate_answer(sess, datasetVal, rev_vocab, sample=100, log=True)
+        qa.evaluate_answer(sess, datasetVal, rev_vocab, sample=1000, log=True)
 
 if __name__ == "__main__":
     tf.app.run()

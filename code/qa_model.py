@@ -43,7 +43,7 @@ class Encoder(object):
         self.size = size
         self.vocab_dim = vocab_dim
         self.LSTMcell = tf.nn.rnn_cell.BasicLSTMCell(self.size)
-        self.CompresserLSTMcell = tf.nn.rnn_cell.BasicLSTMCell(1)
+        self.LSTMcellFinal = tf.nn.rnn_cell.BasicLSTMCell(self.size*2)
 
     def encode(self, inputs, masks, encoder_state_input=None):
         """
@@ -63,13 +63,14 @@ class Encoder(object):
         question, context = inputs
         questionLen, contextLen = masks
 
-        #questionLen = tf.reduce_sum(tf.cast(questionMask, tf.int32), axis=1)
-        #contextLen = tf.reduce_sum(tf.cast(contextMask, tf.int32), axis=1)
         # Question LSTM
         with vs.variable_scope("LSTMQuestionContext", reuse=None):
             # Biderectional
-            _, (statesQuestion_fw, statesQuestion_bw)  = tf.nn.bidirectional_dynamic_rnn(self.LSTMcell, self.LSTMcell, inputs=question,
+            _, (finalStateQuestion_fw, finalStateQuestion_bw)  = tf.nn.bidirectional_dynamic_rnn(self.LSTMcell, self.LSTMcell, inputs=question,
                                                                 sequence_length=questionLen, dtype=tf.float32)
+
+            #questionRep = tf.concat(2, statesQuestion)
+            #questionRep = statesQuestion[0] + statesQuestion[1]
 
             # Uniderectional
             #_, statesQuestion = tf.nn.dynamic_rnn(cell=self.LSTMcell, inputs=question,
@@ -80,38 +81,40 @@ class Encoder(object):
             #(outputsFw, outputsBw)
             outputs, _ = tf.nn.bidirectional_dynamic_rnn(self.LSTMcell, self.LSTMcell, inputs=context,
                                                           sequence_length=contextLen, dtype=tf.float32,
-                                                          initial_state_fw=statesQuestion_fw,
-                                                          initial_state_bw=statesQuestion_bw)
-            questionContext = tf.concat(2, outputs)
+                                                          initial_state_fw=finalStateQuestion_fw,
+                                                          initial_state_bw=finalStateQuestion_bw)
+            questionContextRep = tf.concat(2, outputs)
+            #questionContextRep = outputs[0]+outputs[1]
 
             # Uniderectional
             #questionContext, _ = tf.nn.dynamic_rnn(cell=self.LSTMcell, inputs=context,
             #                                                                  sequence_length=contextLen, dtype=tf.float32,
             #                                                                  initial_state=statesQuestion)
+        #return(questionContext, contextLen)
 
+        with vs.variable_scope("Attention", reuse=False):
+            W_att = tf.get_variable("W_att", shape=(2*self.size, self.vocab_dim), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
 
-        return(questionContext)
+            #def pred_fn(current_output):
+            #    return tf.matmul(current_output, W_att)
 
-        with vs.variable_scope("Compresser", reuse=False):
-            #(oneDimOutputs_fw, oneDimOutputs_bw)
-            oneDimOutputs, _ = tf.nn.bidirectional_dynamic_rnn(self.CompresserLSTMcell,
-                                                          self.CompresserLSTMcell, inputs=questionContext,
-                                                          sequence_length=contextLen, dtype=tf.float32)
+            tmp = tf.map_fn(lambda current_output : tf.matmul(current_output, W_att), questionContextRep)
+            att = tf.batch_matmul(tmp, tf.transpose(question, perm=[0, 2, 1]))
+            weighted_questionRep = tf.batch_matmul(att, question)
 
+            finalInputs = tf.concat(2, (questionContextRep, weighted_questionRep))
 
-        #output = tf.reduce_sum(context, 1)
-        #_, max_length, _ = oneDimOutputs_fw.get_shape().as_list()
-        #oneDimOutputs_fw = tf.reshape(oneDimOutputs_fw, [-1, max_length])
-        #oneDimOutputs_bw = tf.reshape(oneDimOutputs_bw, [-1, max_length])
-        #output = (oneDimOutputs_fw, oneDimOutputs_bw)
-        #return output  # Shape is [batch_size, max_length, encoded_size]        ## Must be a state of shape (None, some_enconder_number)
+        return (finalInputs, contextLen)
+        #with vs.variable_scope("Compresser", reuse=False):
+        #    #(oneDimOutputs_fw, oneDimOutputs_bw)
+        #    oneDimOutputs, _ = tf.nn.bidirectional_dynamic_rnn(self.CompresserLSTMcell,
+        #                                                  self.CompresserLSTMcell, inputs=questionContext,
+        #                                                  sequence_length=contextLen, dtype=tf.float32)
 
-        oneDimOutputs = tf.concat(1, oneDimOutputs)
-        _, max_length, _ = oneDimOutputs.get_shape().as_list()
-
-        oneDimOutputs = tf.reshape(oneDimOutputs, [-1, max_length])
-
-        return(oneDimOutputs)
+        #oneDimOutputs = tf.concat(1, oneDimOutputs)
+        #_, max_length, _ = oneDimOutputs.get_shape().as_list()
+        #oneDimOutputs = tf.reshape(oneDimOutputs, [-1, max_length])
+        #return(oneDimOutputs)
 
 
 
@@ -119,6 +122,8 @@ class Encoder(object):
 class Decoder(object):
     def __init__(self, output_size):
         self.output_size = output_size
+        self.LSTMcellCompresser = tf.nn.rnn_cell.BasicLSTMCell(1)
+        self.LSTMcell = tf.nn.rnn_cell.BasicLSTMCell(self.output_size)
 
     def decode(self, knowledge_rep, dropout=None):
         """
@@ -134,53 +139,76 @@ class Decoder(object):
         """
 
         # Approach 1
+
+        # Run final Uniderectional LSTM one final inputs representation
+        #finalInputs, contextLen = knowledge_rep
+        #with vs.variable_scope("FinalLSTMs", reuse = False):
+            #outputs_s, _ = tf.nn.dynamic_rnn(self.LSTMcellCompresser, inputs=finalInputs, sequence_length=contextLen, dtype=tf.float32)
+        #    _, (_, output_s) = tf.nn.dynamic_rnn(self.LSTMcell, inputs=finalInputs, sequence_length=contextLen, dtype=tf.float32)
+
+        #with vs.variable_scope("FinalLSTMe", reuse=False):
+            #outputs_e, _ = tf.nn.dynamic_rnn(self.LSTMcellCompresser, inputs=finalInputs, sequence_length=contextLen, dtype=tf.float32)
+        #    _, (_, output_e) = tf.nn.dynamic_rnn(self.LSTMcell, inputs=finalInputs, sequence_length=contextLen, dtype=tf.float32)
+
+        #return(output_s, output_e)
+        #outputs_s = outputs[:, :, 0]
+        #outputs_e = outputs[:, :, 1]
+        #outputs_s = tf.reshape(outputs_s, [-1, self.output_size])
+        #outputs_e = tf.reshape(outputs_e, [-1, self.output_size])
+
+        #return(outputs_s, outputs_e)
+
+
+        # Approach 2
+        #final_inputs, contextLen = knowledge_rep
         #with vs.variable_scope("Decoder", reuse=False):
-        #    output_s = tf.contrib.layers.fully_connected(inputs=knowledge_rep, num_outputs=self.output_size,
+        #    output_s = tf.contrib.layers.fully_connected(inputs=final_inputs, num_outputs=self.output_size,
         #                                                 weights_initializer=tf.contrib.layers.xavier_initializer())
-        #    output_e = tf.contrib.layers.fully_connected(inputs=knowledge_rep, num_outputs=self.output_size,
+        #    output_e = tf.contrib.layers.fully_connected(inputs=final_inputs, num_outputs=self.output_size,
         #                                                 weights_initializer=tf.contrib.layers.xavier_initializer())
         #return (output_s, output_e)
 
 
 
-
-
-
-
-
-        # Approach 2
-        _, max_length, encoded_size = knowledge_rep.get_shape().as_list()
+        # Approach 3
+        #_, max_length, encoded_size = knowledge_rep.get_shape().as_list()
+        final_inputs, contextLen = knowledge_rep
 
         with vs.variable_scope("Decoder", reuse=None):
-            W_s = tf.get_variable("W_s", shape=(encoded_size, 1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
-            b_s = tf.get_variable("b_s", shape=(1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+            W_s = tf.get_variable("W_s", shape=(final_inputs.get_shape()[2], 1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+            W_e = tf.get_variable("W_e", shape=(final_inputs.get_shape()[2], 1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
 
-            W_e = tf.get_variable("W_e", shape=(encoded_size, 1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
-            b_e = tf.get_variable("b_e", shape=(1), dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+            tmp_s = tf.map_fn(lambda current_output: tf.matmul(current_output, W_s), final_inputs)
+            tmp_e = tf.map_fn(lambda current_output: tf.matmul(current_output, W_e), final_inputs)
 
-        summaryRep_s = []
-        summaryRep_e = []
-        with vs.variable_scope("Decoder", reuse=True):
-            for time_step in range(knowledge_rep.get_shape()[1]):
-                x = knowledge_rep[:, time_step, :]
+            outputs_s = tf.reshape(tmp_s, [-1, self.output_size])
+            outputs_e = tf.reshape(tmp_e, [-1, self.output_size])
 
-                if dropout is not None:
-                    summaryRep_s.append(tf.matmul(tf.nn.dropout(x, dropout), W_s) + b_s)
-                    summaryRep_e.append(tf.matmul(tf.nn.dropout(x, dropout), W_e) + b_e)
-                else:
-                    summaryRep_s.append(tf.matmul(x, W_s) + b_s)
-                    summaryRep_e.append(tf.matmul(x, W_e) + b_e)
+        return(outputs_s, outputs_e)
 
-        output_s = tf.transpose(tf.stack(summaryRep_s), perm=[1, 0, 2])
-        output_s = tf.reshape(output_s, [-1, max_length])
+        #summaryRep_s = []
+        #summaryRep_e = []
+        #with vs.variable_scope("Decoder", reuse=True):
+        #    for time_step in range(knowledge_rep.get_shape()[1]):
+        #        x = knowledge_rep[:, time_step, :]
 
-        output_e = tf.transpose(tf.stack(summaryRep_e), perm=[1, 0, 2])
-        output_e = tf.reshape(output_e, [-1, max_length])
+        #        if dropout is not None:
+        #            summaryRep_s.append(tf.matmul(tf.nn.dropout(x, dropout), W_s) + b_s)
+        #            summaryRep_e.append(tf.matmul(tf.nn.dropout(x, dropout), W_e) + b_e)
+        #        else:
+        #            summaryRep_s.append(tf.matmul(x, W_s) + b_s)
+        #            summaryRep_e.append(tf.matmul(x, W_e) + b_e)
 
-        return (output_s, output_e) #Must be of shape (None, Max_Context_Length)
+        #output_s = tf.transpose(tf.stack(summaryRep_s), perm=[1, 0, 2])
+        #output_s = tf.reshape(output_s, [-1, max_length])
+
+        #output_e = tf.transpose(tf.stack(summaryRep_e), perm=[1, 0, 2])
+        #output_e = tf.reshape(output_e, [-1, max_length])
+
+        #return (output_s, output_e) #Must be of shape (None, Max_Context_Length)
 
 class QASystem(object):
-    def __init__(self, encoder, decoder, embed_path, FLAGS, *args):
+    def __init__(self, encoder, decoder, embed_path, FLAGS, rev_vocab, *args):
         """
         Initializes your System
 
@@ -202,7 +230,7 @@ class QASystem(object):
         self.numEpochs = FLAGS.epochs
         self.dropout = FLAGS.dropout
         self.starter_learning_rate = FLAGS.learning_rate
-
+        self.vocab = rev_vocab
 
         # ==== set up placeholder tokens ========
         self.p_question = tf.placeholder(shape=(None, self.questionMaxLen), name="Question", dtype=tf.int32)
@@ -440,7 +468,7 @@ class QASystem(object):
         """
         numExamples = len(dataset)
         totalBatches = numExamples/self.batch_size
-        batchesToDisplay = int(totalBatches/5)
+        batchesToDisplay = int(totalBatches/10)
 
         minLoss = 100000000
 
@@ -452,7 +480,7 @@ class QASystem(object):
             randomOrder = np.random.permutation(numExamples)
             firstExampleInBatch = 0
             batches = 0
-            while firstExampleInBatch < numExamples:
+            while firstExampleInBatch < numExamples-1:
                 # Prepare minibatch
                 currBatchStart = firstExampleInBatch
                 currBatchEnd = min(firstExampleInBatch + self.batch_size - 1, numExamples - 1)
@@ -472,13 +500,13 @@ class QASystem(object):
             toc = time.time()
             logging.info("Last epoch took: %f seconds" % (toc - tic))
 
-
             # Save model after each epoch
             if currLoss <= minLoss:
                 minLoss = currLoss
                 logging.info("Achieved best loss so far, saving the model")
                 self.saver.save(session, train_dir+'my-model')
             #saver.save(session, train_dir)
+            self.evaluate_answer(session, dataset, self.vocab, sample=100, log=True)
 
         # some free code to print out number of parameters in your model
         # it's always good to check!
