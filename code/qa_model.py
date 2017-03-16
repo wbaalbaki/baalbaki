@@ -489,7 +489,7 @@ class QASystem(object):
 
                 # Train
                 _, currLoss = self.optimize(session, currExamples)
-                #currLoss /= len(currExamples)
+                currLoss /= len(currExamples)
                 totLoss += currLoss
 
                 # Display what is the current batch
