@@ -17,11 +17,11 @@ import logging
 
 logging.basicConfig(level=logging.INFO)
 
-tf.app.flags.DEFINE_float("learning_rate", 0.001, "Learning rate.")
+tf.app.flags.DEFINE_float("learning_rate", 0.005, "Learning rate.")
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
 tf.app.flags.DEFINE_integer("batch_size", 100, "Batch size to use during training.")
-tf.app.flags.DEFINE_integer("epochs", 15, "Number of epochs to train.")
+tf.app.flags.DEFINE_integer("epochs", 20, "Number of epochs to train.")
 tf.app.flags.DEFINE_integer("state_size", 50, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("output_size", 766, "The output size of your model.")
 tf.app.flags.DEFINE_integer("question_size", 100, "The max question size of your model.")
@@ -126,7 +126,7 @@ def initialize_datasets(data_dir, trainTest='train', debugMode=False):
                        "span": span})
 
         numExamples += 1
-        if debugMode and numExamples > 100:
+        if debugMode and numExamples > 500:
             break
 
     # Close files
@@ -140,6 +140,8 @@ def main(_):
     # Do what you need to load datasets from FLAGS.data_dir
     datasetTrain = initialize_datasets(FLAGS.data_dir, 'train.', debugMode=False)
     datasetVal = initialize_datasets(FLAGS.data_dir, 'val.', debugMode=False)
+    datasetTrain.extend(datasetVal)
+
 
     embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
     vocab_path = FLAGS.vocab_path or pjoin(FLAGS.data_dir, "vocab.dat")

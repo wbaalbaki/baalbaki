@@ -480,6 +480,7 @@ class QASystem(object):
             randomOrder = np.random.permutation(numExamples)
             firstExampleInBatch = 0
             batches = 0
+            totLoss = 0
             while firstExampleInBatch < numExamples-1:
                 # Prepare minibatch
                 currBatchStart = firstExampleInBatch
@@ -488,6 +489,8 @@ class QASystem(object):
 
                 # Train
                 _, currLoss = self.optimize(session, currExamples)
+                currLoss /= len(currExamples)
+                totLoss += currLoss
 
                 # Display what is the current batch
                 if batches % batchesToDisplay == 0: logging.info("%d batches out of %d, currentLoss is %f", batches, totalBatches, currLoss)
@@ -498,11 +501,11 @@ class QASystem(object):
 
             # Print current progress
             toc = time.time()
-            logging.info("Last epoch took: %f seconds" % (toc - tic))
+            logging.info("Last epoch took: %f seconds, average loss of %f", (toc - tic), totLoss/float(numExamples))
 
             # Save model after each epoch
-            if currLoss <= minLoss:
-                minLoss = currLoss
+            if totLoss <= minLoss:
+                minLoss = totLoss
                 logging.info("Achieved best loss so far, saving the model")
                 self.saver.save(session, train_dir+'my-model')
             #saver.save(session, train_dir)
