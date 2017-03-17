@@ -20,12 +20,12 @@ logging.basicConfig(level=logging.INFO)
 tf.app.flags.DEFINE_float("learning_rate", 0.005, "Learning rate.")
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
-tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
+tf.app.flags.DEFINE_integer("batch_size", 100, "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("epochs", 20, "Number of epochs to train.")
 tf.app.flags.DEFINE_integer("state_size", 50, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("output_size", 766, "The output size of your model.")
 tf.app.flags.DEFINE_integer("question_size", 100, "The max question size of your model.")
-tf.app.flags.DEFINE_integer("embedding_size", 50, "Size of the pretrained vocabulary.")
+tf.app.flags.DEFINE_integer("embedding_size", 100, "Size of the pretrained vocabulary.")
 tf.app.flags.DEFINE_string("data_dir", "data/squad", "SQuAD directory (default ./data/squad)")
 tf.app.flags.DEFINE_string("train_dir", "train", "Training directory to save the model parameters (default: ./train).")
 tf.app.flags.DEFINE_string("load_train_dir", "", "Training directory to load model parameters from to resume training (default: {train_dir}).")
@@ -128,7 +128,7 @@ def initialize_datasets(data_dir, trainTest='train', debugMode=False):
                        "span": span})
 
         numExamples += 1
-        if debugMode and numExamples > 500:
+        if debugMode and numExamples > 100:
             break
 
     # Close files

@@ -181,6 +181,9 @@ class Decoder(object):
             tmp_s = tf.map_fn(lambda current_output: tf.matmul(current_output, W_s), final_inputs)
             tmp_e = tf.map_fn(lambda current_output: tf.matmul(current_output, W_e), final_inputs)
 
+            #tmp_s = tf.map_fn(lambda current_output: tf.matmul(tf.nn.dropout(current_output, dropout), W_s), final_inputs)
+            #tmp_e = tf.map_fn(lambda current_output: tf.matmul(tf.nn.dropout(current_output, dropout), W_e), final_inputs)
+
             outputs_s = tf.reshape(tmp_s, [-1, self.output_size])
             outputs_e = tf.reshape(tmp_e, [-1, self.output_size])
 
