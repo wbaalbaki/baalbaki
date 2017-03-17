@@ -142,7 +142,7 @@ def main(_):
     # Do what you need to load datasets from FLAGS.data_dir
     datasetTrain = initialize_datasets(FLAGS.data_dir, 'train.', debugMode=False)
     datasetVal = initialize_datasets(FLAGS.data_dir, 'val.', debugMode=False)
-    #datasetTrain.extend(datasetVal)
+    datasetTrain.extend(datasetVal)
 
 
     embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
