@@ -20,7 +20,7 @@ logging.basicConfig(level=logging.INFO)
 tf.app.flags.DEFINE_float("learning_rate", 0.005, "Learning rate.")
 tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
 tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
-tf.app.flags.DEFINE_integer("batch_size", 100, "Batch size to use during training.")
+tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
 tf.app.flags.DEFINE_integer("epochs", 20, "Number of epochs to train.")
 tf.app.flags.DEFINE_integer("state_size", 50, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("output_size", 766, "The output size of your model.")
@@ -99,6 +99,7 @@ def initialize_datasets(data_dir, trainTest='train', debugMode=False):
         # Pad question
         if questionLen > FLAGS.question_size:
             question = question[:FLAGS.question_size]
+            questionLen = FLAGS.question_size
             #questionMask = [True] * FLAGS.question_size
         else:
             question = question + [PAD_ID] * (FLAGS.question_size - questionLen)
@@ -111,6 +112,7 @@ def initialize_datasets(data_dir, trainTest='train', debugMode=False):
         # Pad context
         if contextLen > FLAGS.output_size:
             context = context[:FLAGS.output_size]
+            contextLen = FLAGS.output_size
             #contextMask = [True] * FLAGS.output_size
         else:
             context = context + [PAD_ID] * (FLAGS.output_size - contextLen)
